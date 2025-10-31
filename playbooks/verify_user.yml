@@ -1,6 +1,7 @@
 ---
 - name: Verify the carlos user was created
   hosts: servidores
+  gather_facts: no
 
   tasks:
 
@@ -13,11 +14,11 @@
     - name: Carlos was created
       ansible.builtin.debug:
         msg: "Carlos was created"
-      when: carlos_check['changed'] == false
+      when: carlos_check.changed == false
 
     - name: Output carlos user status to file
       ansible.builtin.lineinfile:
         path: /home/student/verify.txt
         line: "Carlos was created"
         create: true
-        when: carlos_check['changed'] == false
+      when: carlos_check.changed == false

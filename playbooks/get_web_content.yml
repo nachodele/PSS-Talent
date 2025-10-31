@@ -1,0 +1,25 @@
+---
+- name: Test web content
+  hosts: localhost
+  become: yes
+  gather_facts: no
+
+  tasks:
+    - block:
+        - name: Retrieve web content
+          ansible.builtin.uri:
+            url: "http://vagrant1"
+            return_content: yes
+          register: web_response
+
+        - name: Set content variable
+          set_fact:
+            content: "{{ web_response.content }}"
+
+      rescue:
+        - name: Write to error file
+          ansible.builtin.copy:
+            dest: error.log
+            content: "{{ content }}"
+            mode: '0644'
+          when: content is defined
