@@ -1,3 +1,0 @@
----
-- import_playbook: playbooks/dev_deploy.yml
-- import_playbook: playbooks/get_web_content.yml
