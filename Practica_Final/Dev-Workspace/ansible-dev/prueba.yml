@@ -1,5 +1,0 @@
-- hosts: all
-  gather_facts: yes
-  tasks:
-    - debug:
-        msg: "{{ inventory_hostname }} - IP pública: {{ ansible_host }}"
