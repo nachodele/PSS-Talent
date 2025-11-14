@@ -116,16 +116,23 @@ resource "aws_route_table_association" "private_associations" {
   route_table_id = aws_route_table.private_rt[each.key].id
 }
 
-# Key pair SSH
+# Encryption RSA
 resource "tls_private_key" "ssh_key" {
   algorithm = "RSA"
   rsa_bits  = 4096
 }
 
-# Key pair SSH
+# Public Key
 resource "aws_key_pair" "generated_key" {
   key_name   = "ssh_key_nachodele"
   public_key = tls_private_key.ssh_key.public_key_openssh
+}
+
+# Store Private Key
+resource "local_file" "private_key_pem" {
+  content = tls_private_key.ssh_key.private_key_pem
+  filename = "${path.module}/ssh_key_nachodele.pem"
+  file_permission = "0400"
 }
 
 # Security Group for Web Servers
