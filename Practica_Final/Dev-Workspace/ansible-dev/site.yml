@@ -3,7 +3,7 @@
   gather_facts: no
   remote_user: ubuntu
   vars:
-    ansible_ssh_private_key_file: /home/vagrant/PSS-Talent/Practica_Final/Parte-2/terraform-dev/ssh_key_nachodele.pem
+    ansible_ssh_private_key_file: /home/vagrant/PSS-Talent/Practica_Final/Dev-Workspace/terraform-dev/ssh_key_nachodele.pem
 
   roles:
     - webserver

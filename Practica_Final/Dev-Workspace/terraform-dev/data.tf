@@ -1,3 +1,9 @@
+# Bucket s3
+data "aws_s3_bucket" "existing_bucket" {
+  bucket = "proyecto-final-pss-nachodele-8540ad6a"
+}
+
+
 # Data source para buscar la última AMI Ubuntu 20.04 LTS
 data "aws_ami" "ubuntu" {
   most_recent = true

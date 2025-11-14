@@ -4,6 +4,15 @@ variable "region" {
   default     = "ap-south-1"
 }
 
+variable "additional_tags" {
+  description = "Tags adicionales para el bucket"
+  type        = map(string)
+  default = {
+    Purpose   = "Static Website Hosting"
+    CreatedBy = "Terraform"
+  }
+}
+
 variable "vpc_cidr" {
   description = "CIDR block for the VPC"
   default     = "10.0.0.0/16"

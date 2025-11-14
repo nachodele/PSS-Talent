@@ -13,7 +13,7 @@ terraform {
   }
 
   backend "s3" {
-    bucket = "proyecto-final-pss-nachodele-9ab00645"
+    bucket = "proyecto-final-pss-nachodele-8540ad6a"
     key    = "backend/state.tfstate"
     region = "ap-south-1"
   }
@@ -24,4 +24,3 @@ provider "aws" {
 }
 
 provider "random" {}
-

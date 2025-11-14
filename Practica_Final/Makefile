@@ -1,6 +1,6 @@
 # Variables
-TERRAFORM_DIR=./terraform-dev
-ANSIBLE_DIR=./ansible
+TERRAFORM_DIR=./Dev-Workspace/terraform-dev
+ANSIBLE_DIR=./Dev-Workspace/ansible-dev
 INVENTORY=d-inventory/aws_ec2.yml
 PLAYBOOK=site.yml
 
@@ -14,7 +14,7 @@ deploy:
 	cd $(TERRAFORM_DIR) && terraform apply -auto-approve
 
 	@echo "Esperando a que las instancias EC2 estén disponibles..."
-	sleep 10
+	sleep 80
 
 	@echo "Ejecutando ansible-playbook..."
 	cd $(ANSIBLE_DIR) && ansible-playbook -i $(INVENTORY) $(PLAYBOOK)

@@ -7,9 +7,9 @@ keyed_groups:
   - key: tags.role
     prefix: role
 hostnames:
-  - public_ip_address
+  - public-ip-address
 compose:
   ansible_host: public_ip_address
   ansible_user: ubuntu
-  ansible_ssh_private_key_file: /home/vagrant/PSS-Talent/Practica_Final/Parte-2/terraform-dev/ssh_key_nachodele.pem
+  ansible_ssh_private_key_file: /home/vagrant/PSS-Talent/Practica_Final/Dev-Workspace/terraform-dev/ssh_key_nachodele.pem
 strict: False
