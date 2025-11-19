@@ -1,0 +1,14 @@
+plugin: amazon.aws.aws_ec2
+regions:
+  - ap-south-1
+filters:
+  instance-state-name: running
+  tag:Owner: "nachodele"
+keyed_groups:
+  - key: tags.Role
+    prefix: role
+hostnames:
+  - private-ip-address
+compose:
+  ansible_host: public_ip_address
+strict: False

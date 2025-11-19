@@ -1,0 +1,5 @@
+- name: Deploy webserver role on first EC2 instance
+  hosts: "{{ groups['role_webserver'][0] }}"
+  gather_facts: no
+  roles:
+    - webserver

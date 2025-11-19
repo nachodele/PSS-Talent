@@ -1,0 +1,22 @@
+- name: Update apt cache and install nginx
+  ansible.builtin.apt:
+    name: nginx
+    state: present
+    update_cache: yes
+
+- name: Ensure nginx service is started and enabled
+  ansible.builtin.service:
+    name: nginx
+    state: started
+    enabled: yes
+
+- name: Validate that nginx is responding HTTP 200
+  ansible.builtin.uri:
+    url: http://localhost
+    status_code: 200
+    return_content: no
+    timeout: 10
+  register: web_status
+  retries: 3
+  delay: 10
+  until: web_status.status == 200
