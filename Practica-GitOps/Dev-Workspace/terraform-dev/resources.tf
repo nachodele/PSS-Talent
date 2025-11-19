@@ -127,21 +127,11 @@ resource "aws_route_table_association" "private_associations" {
   route_table_id = aws_route_table.private_rt[each.key].id
 }
 
-# --------- Claves SSH ---------
-resource "tls_private_key" "ssh_key" {
-  algorithm = "RSA"
-  rsa_bits  = 4096
-}
+# --------- Clave SSH fija ---------
 
-resource "aws_key_pair" "generated_key" {
-  key_name   = "ssh_key_nachodele"
-  public_key = tls_private_key.ssh_key.public_key_openssh
-}
-
-resource "local_file" "private_key_pem" {
-  content         = tls_private_key.ssh_key.private_key_pem
-  filename        = pathexpand("~/.ssh/nachodele.pem")
-  file_permission = "0400"
+resource "aws_key_pair" "fixed_key" {
+  key_name   = "nachodele-fixed-key"
+  public_key = var.ssh_public_key
 }
 
 # --------- Grupos de Seguridad ---------
@@ -284,7 +274,7 @@ resource "aws_launch_template" "asg_lt" {
   name_prefix             = "nachodele-asg-"
   image_id                = data.aws_ami.ubuntu.id
   instance_type           = var.instance_type
-  key_name                = aws_key_pair.generated_key.key_name
+  key_name                = aws_key_pair.fixed_key.key_name
   vpc_security_group_ids  = [aws_security_group.asg_sg.id]
 
   tag_specifications {
@@ -293,7 +283,7 @@ resource "aws_launch_template" "asg_lt" {
       Name    = "ASG-nachodele"
       Owner   = local.common_tags.Owner
       Project = local.common_tags.Project
-      Role    = "webserver"          # Agregado para la etiqueta Role
+      Role    = "webserver"
     }
   }
 }
@@ -343,12 +333,11 @@ resource "aws_autoscaling_group" "asg" {
   }
 
   tag {
-    key                 = "Role"             # Agregado para propagar la etiqueta Role a las instancias
+    key                 = "Role"
     value               = "webserver"
     propagate_at_launch = true
   }
 }
-
 
 # --------- RDS PostgreSQL ---------
 
@@ -380,4 +369,4 @@ resource "aws_db_instance" "rds" {
     Owner   = local.common_tags.Owner
     Project = local.common_tags.Project
   }
-} 
+}

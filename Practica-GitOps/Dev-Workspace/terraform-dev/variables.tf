@@ -33,6 +33,11 @@ variable "rds_password" {
   sensitive   = true
 }
 
+variable "ssh_public_key" {
+  description = "Clave pública SSH para las instancias"
+  type        = string
+}
+
 variable "asg_min_size" {
   type    = number
   default = 2
