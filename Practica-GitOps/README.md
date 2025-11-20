@@ -2,7 +2,7 @@
 
 - [0. Introducción: ¿Por qué del Proyecto?](#0-introducción-¿por-qué-del-proyecto)
 - [1. Bucket S3](#1-bucket-s3)
-- [2. Llaves SSH fuera del ciclo de Terraform](#2-llaves-ssh-fuera-del-ciclo-de-terraform)
+- [2. Llaves SSH](#2-llaves-ssh)
 - [3. Creación de la VPC y subredes](#3-creación-de-la-vpc-y-subredes)
 - [4. Configuración de Grupos de Seguridad](#4-configuración-de-grupos-de-seguridad)
 - [5. Configuración del Application Load Balancer (ALB)](#5-configuración-del-application-load-balancer-alb)
