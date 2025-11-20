@@ -62,15 +62,18 @@ jobs:
           pip3 install --upgrade ansible ansible-lint boto3 botocore
 
       - name: Lint Ansible playbooks
-        run: ansible-lint ${{ env.ANSIBLE_DIR }}
+        run: |
+          cd ${{ env.ANSIBLE_DIR }}
+          ansible-lint .
 
       - name: Run Ansible playbook
         env:
           ANSIBLE_HOST_KEY_CHECKING: "False"
         run: |
+          cd ${{ env.ANSIBLE_DIR }}
           echo "${{ secrets.EC2_SSH_PRIVATE_KEY }}" > key.pem
           chmod 600 key.pem
-          ansible-playbook ${{ env.ANSIBLE_DIR }}/${{ env.PLAYBOOK }}
+          ansible-playbook ${{ env.PLAYBOOK }}
 
       - name: Clean up private key
         run: rm -f key.pem
