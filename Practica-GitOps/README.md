@@ -10,11 +10,12 @@
 - [7. Creación de Base de Datos RDS PostgreSQL](#7-creación-de-base-de-datos-rds-postgresql)
 - [8. Configuración de Ansible con inventario dinámico](#8-configuración-de-ansible-con-inventario-dinámico)
 - [9. Integración con GitHub Actions para despliegue y destrucción](#9-integración-con-github-actions-para-despliegue-y-destrucción)
-
 ---
 
 ## 0. Introducción: ¿Por qué del Proyecto?  
 Se necesitan servidores para alojar tiendas online, mostrar sus productos y procesar los pedidos. Sin servidores, la tienda no sería visible en Internet ni podría responder a los usuarios.
+
+**Terraform**
 
 ## 1. Bucket S3  
 Un contenedor lógico en la nube, usado para almacenar objetos (archivos) de forma económica, segura y escalable.  
@@ -51,13 +52,21 @@ Habria que configurar alarmas CloudWatch para uso de CPU alto y bajo, y las poli
 Base de datos creada en subred privada, accesible solo por instancias EC2, para seguridad y facilidad en backups y restauraciones.
 Está gestionada por AWS, lo que simplifica tareas como backups, restauración y escalado.
 
-## 8. Configuración de Ansible con inventario dinámico  
+**Ansible**
+
+## 8. Configuración con inventario dinámico  
 Configruamos ansible con la clave privada para que pueda realizar en las instancias (hosts) las tareas especificadas en los roles, y definimos el inventario dinámico, ejecutandolo a través del playbook.
 
 El plugin aws_ec2 de Ansible se usa para crear un inventario dinámico de las instancias en tiempo real, en el momento exacto que se ejecuta la automatización. Así se puede administrar automáticamente todas
 las máquinas sin actualizar a mano el inventario.
 
 ## 9. Integración con GitHub Actions para despliegue y destrucción  
-Integramos ambas herramientas en el github actions, donde definimos dos workflow on dispatch (ejecucion manual, en una situacion real se configuraria basandolo en eventos como push o pull request).
-- Deploy: ejecuta terraform y ansible, desplegando la infraestructura configurada, tras una serie de chequeos sintácticos y estructurales.
-- Destroy:  para destruir la infraestructura que ya no es útil.
+Integramos ambas herramientas en GitHub Actions, donde definimos dos workflows `on dispatch` (ejecución manual; en una situación real se configurarían basados en eventos como push o pull request):
+
+- **Deploy**: ejecuta Terraform y Ansible, desplegando la infraestructura configurada, tras una serie de chequeos sintácticos y estructurales. 
+- **Destroy**: para destruir la infraestructura que ya no es útil.
+
+Además, al workflow se le aplica **code scanning** para analizar automáticamente el código y detectar posibles vulnerabilidades, errores o malas prácticas
+
+### Runner utilizado  
+Los workflows se ejecutan en un **hosted runner** de GitHub, que es un servidor gestionado por GitHub con el software necesario preinstalado para correr pipelines. Esto permite ejecutar los despliegues y destrucciones en un entorno controlado, seguro y con recursos escalables sin tener que gestionar infraestructura propia para CI/CD.
