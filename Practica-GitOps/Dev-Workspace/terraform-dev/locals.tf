@@ -8,7 +8,7 @@ locals {
     { name = "private-subnet-2", cidr = var.private_subnets_cidrs[1], az = var.availability_zones[1] }
   ]
 
-  project     = "practica-gitops"
+  project = "practica-gitops"
   common_tags = {
     Environment = "Terraform"
     Project     = local.project

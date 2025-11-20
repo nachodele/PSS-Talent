@@ -75,7 +75,7 @@ resource "aws_route_table" "public_rt" {
 }
 
 resource "aws_route_table_association" "public_associations" {
-  for_each = aws_subnet.public_subnets
+  for_each       = aws_subnet.public_subnets
   subnet_id      = each.value.id
   route_table_id = aws_route_table.public_rt.id
 }
@@ -271,11 +271,11 @@ resource "aws_lb_listener" "asg_listener" {
 # --------- AutoScaling Group ---------
 
 resource "aws_launch_template" "asg_lt" {
-  name_prefix             = "nachodele-asg-"
-  image_id                = data.aws_ami.ubuntu.id
-  instance_type           = var.instance_type
-  key_name                = aws_key_pair.fixed_key.key_name
-  vpc_security_group_ids  = [aws_security_group.asg_sg.id]
+  name_prefix            = "nachodele-asg-"
+  image_id               = data.aws_ami.ubuntu.id
+  instance_type          = var.instance_type
+  key_name               = aws_key_pair.fixed_key.key_name
+  vpc_security_group_ids = [aws_security_group.asg_sg.id]
 
   tag_specifications {
     resource_type = "instance"
@@ -289,12 +289,12 @@ resource "aws_launch_template" "asg_lt" {
 }
 
 resource "aws_autoscaling_group" "asg" {
-  name                  = "nachodele"
-  min_size              = var.asg_min_size
-  max_size              = var.asg_max_size
-  desired_capacity      = var.asg_min_size
-  vpc_zone_identifier   = [for k, v in aws_subnet.public_subnets : v.id]
-  target_group_arns     = [aws_lb_target_group.asg_tg.arn]
+  name                = "nachodele"
+  min_size            = var.asg_min_size
+  max_size            = var.asg_max_size
+  desired_capacity    = var.asg_min_size
+  vpc_zone_identifier = [for k, v in aws_subnet.public_subnets : v.id]
+  target_group_arns   = [aws_lb_target_group.asg_tg.arn]
 
   launch_template {
     id      = aws_launch_template.asg_lt.id
