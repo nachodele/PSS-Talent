@@ -26,4 +26,5 @@ jobs:
         run: terraform -chdir=${{ env.TERRAFORM_DIR }} init
 
       - name: Terraform destroy
-        run: terraform -chdir=${{ env.TERRAFORM_DIR }} destroy -auto-approve
+        run: terraform -chdir=${{ env.TERRAFORM_DIR }} destroy -auto-approve -var="rds_password=${RDS_PASSWORD}"
+
