@@ -29,14 +29,14 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v3
 
-      - name: Terraform FMT Check
-        run: terraform -chdir=${{ env.TERRAFORM_DIR }} fmt -recursive -check
-
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v2
         with:
           terraform_version: 1.7.0
-
+          
+      - name: Terraform FMT Check
+        run: terraform -chdir=${{ env.TERRAFORM_DIR }} fmt -recursive -check
+        
       - name: Terraform init
         run: terraform -chdir=${{ env.TERRAFORM_DIR }} init
 
