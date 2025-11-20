@@ -1,15 +1,15 @@
 # Infraestructura y Automatización con Terraform y Ansible
 
-0. Introducción: ¿Por qué del Proyecto?  
-1. Bucket S3  
-2. Llaves SSH fuera del ciclo de Terraform  
-3. Creación de la VPC y subredes  
-4. Configuración de Grupos de Seguridad  
-5. Configuración del Application Load Balancer (ALB)  
-6. Configuración del Auto Scaling Group (ASG)  
-7. Creación de Base de Datos RDS PostgreSQL  
-8. Configuración de Ansible con inventario dinámico  
-9. Integración con GitHub Actions para despliegue y destrucción  
+- [0. Introducción: ¿Por qué del Proyecto?](#0-introducción-¿por-qué-del-proyecto)
+- [1. Bucket S3](#1-bucket-s3)
+- [2. Llaves SSH fuera del ciclo de Terraform](#2-llaves-ssh-fuera-del-ciclo-de-terraform)
+- [3. Creación de la VPC y subredes](#3-creación-de-la-vpc-y-subredes)
+- [4. Configuración de Grupos de Seguridad](#4-configuración-de-grupos-de-seguridad)
+- [5. Configuración del Application Load Balancer (ALB)](#5-configuración-del-application-load-balancer-alb)
+- [6. Configuración del Auto Scaling Group (ASG)](#6-configuración-del-auto-scaling-group-asg)
+- [7. Creación de Base de Datos RDS PostgreSQL](#7-creación-de-base-de-datos-rds-postgresql)
+- [8. Configuración de Ansible con inventario dinámico](#8-configuración-de-ansible-con-inventario-dinámico)
+- [9. Integración con GitHub Actions para despliegue y destrucción](#9-integración-con-github-actions-para-despliegue-y-destrucción)
 
 ---
 
