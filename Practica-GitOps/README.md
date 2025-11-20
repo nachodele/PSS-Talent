@@ -15,7 +15,7 @@
 ## 0. Introducción: ¿Por qué del Proyecto?  
 Se necesitan servidores para alojar tiendas online, mostrar sus productos y procesar los pedidos. Sin servidores, la tienda no sería visible en Internet ni podría responder a los usuarios.
 
-**Terraform**
+# **Terraform**
 
 ## 1. Bucket S3  
 Un contenedor lógico en la nube, usado para almacenar objetos (archivos) de forma económica, segura y escalable.  
@@ -52,7 +52,7 @@ Habria que configurar alarmas CloudWatch para uso de CPU alto y bajo, y las poli
 Base de datos creada en subred privada, accesible solo por instancias EC2, para seguridad y facilidad en backups y restauraciones.
 Está gestionada por AWS, lo que simplifica tareas como backups, restauración y escalado.
 
-**Ansible**
+# **Ansible**
 
 ## 8. Configuración con inventario dinámico  
 Configruamos ansible con la clave privada para que pueda realizar en las instancias (hosts) las tareas especificadas en los roles, y definimos el inventario dinámico, ejecutandolo a través del playbook.
