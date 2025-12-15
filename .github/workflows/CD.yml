@@ -1,0 +1,104 @@
+name: CD - Entorno efímero por PR
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+env:
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
+jobs:
+  terraform-apply:
+    runs-on: ubuntu-latest
+    env:
+      TERRAFORM_DIR: ./Trabajo-Final/Dev-Workspace/terraform
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.7.0
+
+      - name: Terraform Init (backend remoto)
+        env:
+          PR_ID: ${{ github.event.pull_request.number }}
+        run: |
+          terraform -chdir=${{ env.TERRAFORM_DIR }} init
+
+      - name: Terraform Apply
+        env:
+          PR_ID: ${{ github.event.pull_request.number }}
+        run: |
+          terraform -chdir=${{ env.TERRAFORM_DIR }} apply -auto-approve \
+            -var="pr_id=${PR_ID}" \
+            -var="ssh_public_key=${{ secrets.SSH_PUBLIC_KEY }}" \
+            -var="allowed_ssh_cidr=${{ secrets.MY_IP_CIDR }}"
+
+      - name: Export Terraform outputs
+        id: tf-out
+        run: |
+          cd ${{ env.TERRAFORM_DIR }}
+          echo "ip=$(terraform output -raw instance_public_ip)" >> $GITHUB_OUTPUT
+          echo "url=$(terraform output -raw url_entorno)" >> $GITHUB_OUTPUT
+
+  ansible-deploy:
+    needs: terraform-apply
+    runs-on: ubuntu-latest
+    env:
+      ANSIBLE_DIR: ./Trabajo-Final/Dev-Workspace/ansible
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Install Ansible
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-pip
+          pip3 install --upgrade ansible
+
+      - name: Save private key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/nachodele_ssh_key
+          chmod 600 ~/.ssh/nachodele_ssh_key
+
+      - name: Generar inventory con IP del job anterior
+        working-directory: ${{ env.ANSIBLE_DIR }}
+        run: |
+          cat > inventory <<EOF
+          [pr_env]
+          pr_vm ansible_host=${{ needs.terraform-apply.outputs.ip }} ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/nachodele_ssh_key
+          EOF
+
+      - name: Ejecutar Ansible (Docker + app)
+        working-directory: ${{ env.ANSIBLE_DIR }}
+        env:
+          ANSIBLE_HOST_KEY_CHECKING: "False"
+        run: |
+          ansible-playbook main.yml -e "pr_id=${{ github.event.pull_request.number }}"
+
+      - name: Clean up private key
+        run: rm -f ~/.ssh/nachodele_ssh_key
+
+  pr-comment:
+    needs: [terraform-apply]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Comentar URL del entorno en el PR
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: env-url
+          message: |
+            Entorno efímero desplegado:
+            - URL: ${{ needs.terraform-apply.outputs.url }}
