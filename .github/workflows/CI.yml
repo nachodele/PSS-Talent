@@ -1,12 +1,12 @@
 name: CI - Infra y Config
 
 on:
+  workflow_dispatch:
   pull_request:
     types: [opened, synchronize, reopened, edited]
   push:
     branches:
       - main
-
 permissions:
   contents: read
 
