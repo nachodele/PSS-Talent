@@ -2,6 +2,9 @@
 - name: Configurar entorno PR
   hosts: pr_env
 
+  vars:
+    pr_id: "{{ pr_id | default('local') }}"
+
   roles:
     - docker
     - app

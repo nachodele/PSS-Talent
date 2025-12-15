@@ -1,18 +1,12 @@
 ---
-- name: Variables de despliegue app
-  ansible.builtin.set_fact:
-    app_repo_url: "https://github.com/mi-org/mi-api.git"   # CAMBIAR
-    app_repo_version: "main"                               # o rama/tag
-    app_base_dir: "/opt/pr-app"
-    app_container_name: "pr-app"
-    app_container_port: 80
-
-- name: Asegurar dependencias de Docker para Ansible
+- name: Instalar librería docker para módulos de Ansible
+  become: true
   ansible.builtin.pip:
     name: docker
     state: present
 
 - name: Crear carpeta base de la app
+  become: true
   ansible.builtin.file:
     path: "{{ app_base_dir }}"
     state: directory
@@ -20,28 +14,39 @@
     group: ubuntu
     mode: "0755"
 
-- name: Clonar/actualizar repositorio de la app
+- name: Clonar o actualizar repositorio de la app
   ansible.builtin.git:
     repo: "{{ app_repo_url }}"
-    dest: "{{ app_base_dir }}"
+    dest: "{{ app_base_dir }}/repo"
     version: "{{ app_repo_version }}"
-    update: yes
-    force: yes
+    update: true
+
+- name: Copiar código de la app al directorio de build
+  become: true
+  ansible.builtin.copy:
+    src: "{{ app_base_dir }}/repo/{{ app_repo_subdir }}/"
+    dest: "{{ app_base_dir }}/app/"
+    owner: ubuntu
+    group: ubuntu
+    mode: "0755"
+    remote_src: true
 
 - name: Construir imagen Docker de la app
   community.docker.docker_image:
-    name: "pr-app-image"
+    name: "{{ app_image_name }}"
     build:
-      path: "{{ app_base_dir }}"
+      path: "{{ app_base_dir }}/app"
     source: build
     state: present
 
 - name: Asegurar contenedor de la app en ejecución
   community.docker.docker_container:
     name: "{{ app_container_name }}"
-    image: "pr-app-image:latest"
+    image: "{{ app_image_name }}:latest"
     state: started
     recreate: true
     restart_policy: always
     published_ports:
       - "80:{{ app_container_port }}"
+    env:
+      PR_ID: "PR-{{ pr_id | default('local') }}"
