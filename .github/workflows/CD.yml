@@ -1,8 +1,10 @@
 name: CD - Entorno efímero por PR
 
 on:
-  pull_request:
-    types: [opened, synchronize, reopened]
+  workflow_run:
+    workflows: ["CI - Infra y Config"]
+    types:
+      - completed
 
 permissions:
   contents: read
@@ -15,6 +17,8 @@ env:
 
 jobs:
   terraform-apply:
+    # Solo ejecutar si el CI ha sido exitoso
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     env:
       TERRAFORM_DIR: ./Trabajo-Final/Dev-Workspace/terraform
@@ -23,6 +27,12 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
+      - name: Recuperar datos del PR original
+        id: pr
+        uses: potiuk/get-workflow-origin@v1_7
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v3
         with:
@@ -30,13 +40,13 @@ jobs:
 
       - name: Terraform Init (backend remoto)
         env:
-          PR_ID: ${{ github.event.pull_request.number }}
+          PR_ID: ${{ steps.pr.outputs.pull_request_number }}
         run: |
           terraform -chdir=${{ env.TERRAFORM_DIR }} init
 
       - name: Terraform Apply
         env:
-          PR_ID: ${{ github.event.pull_request.number }}
+          PR_ID: ${{ steps.pr.outputs.pull_request_number }}
         run: |
           terraform -chdir=${{ env.TERRAFORM_DIR }} apply -auto-approve \
             -var="pr_id=${PR_ID}" \
@@ -49,9 +59,11 @@ jobs:
           cd ${{ env.TERRAFORM_DIR }}
           echo "ip=$(terraform output -raw instance_public_ip)" >> $GITHUB_OUTPUT
           echo "url=$(terraform output -raw url_entorno)" >> $GITHUB_OUTPUT
+          echo "pr_id=${{ steps.pr.outputs.pull_request_number }}" >> $GITHUB_OUTPUT
 
   ansible-deploy:
     needs: terraform-apply
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     env:
       ANSIBLE_DIR: ./Trabajo-Final/Dev-Workspace/ansible
@@ -72,7 +84,7 @@ jobs:
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/nachodele_ssh_key
           chmod 600 ~/.ssh/nachodele_ssh_key
 
-      - name: Generar inventory con IP del job anterior
+      - name: Generar inventory con IP del job terraform-apply
         working-directory: ${{ env.ANSIBLE_DIR }}
         run: |
           cat > inventory <<EOF
@@ -85,13 +97,14 @@ jobs:
         env:
           ANSIBLE_HOST_KEY_CHECKING: "False"
         run: |
-          ansible-playbook main.yml -e "pr_id=${{ github.event.pull_request.number }}"
+          ansible-playbook main.yml -e "pr_id=${{ needs.terraform-apply.outputs.pr_id }}"
 
       - name: Clean up private key
         run: rm -f ~/.ssh/nachodele_ssh_key
 
   pr-comment:
-    needs: [terraform-apply]
+    needs: terraform-apply
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
 
     steps:
