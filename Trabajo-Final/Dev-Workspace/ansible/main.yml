@@ -6,5 +6,5 @@
     pr_id: "{{ pr_id | default('local') }}"
 
   roles:
-    - docker
+#    - docker
     - app
