@@ -1,8 +1,8 @@
-name: CD - Entorno efímero por PR
+name: CD - Entorno efímero
 
 on:
   workflow_run:
-    workflows: ["CI - Infra y Config"]
+    workflows: ["CI - Infra y Config"]   # nombre EXACTO del workflow de CI
     types:
       - completed
 
@@ -27,11 +27,11 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Recuperar datos del PR original
+      - name: Extraer PR_ID (si hay PR) o usar 0
         id: pr
-        uses: potiuk/get-workflow-origin@v1_7
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PR_NUMBER=$(jq '.[0].pull_requests[0].number // 0' <<< '${{ toJson(github.event.workflow_run.pull_requests) }}')
+          echo "pr_id=$PR_NUMBER" >> $GITHUB_OUTPUT
 
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v3
@@ -40,13 +40,12 @@ jobs:
 
       - name: Terraform Init (backend remoto)
         env:
-          PR_ID: ${{ steps.pr.outputs.pull_request_number }}
-        run: |
-          terraform -chdir=${{ env.TERRAFORM_DIR }} init
+          PR_ID: ${{ steps.pr.outputs.pr_id }}
+        run: terraform -chdir=${{ env.TERRAFORM_DIR }} init
 
       - name: Terraform Apply
         env:
-          PR_ID: ${{ steps.pr.outputs.pull_request_number }}
+          PR_ID: ${{ steps.pr.outputs.pr_id }}
         run: |
           terraform -chdir=${{ env.TERRAFORM_DIR }} apply -auto-approve \
             -var="pr_id=${PR_ID}" \
@@ -59,7 +58,7 @@ jobs:
           cd ${{ env.TERRAFORM_DIR }}
           echo "ip=$(terraform output -raw instance_public_ip)" >> $GITHUB_OUTPUT
           echo "url=$(terraform output -raw url_entorno)" >> $GITHUB_OUTPUT
-          echo "pr_id=${{ steps.pr.outputs.pull_request_number }}" >> $GITHUB_OUTPUT
+          echo "pr_id=${{ steps.pr.outputs.pr_id }}" >> $GITHUB_OUTPUT
 
   ansible-deploy:
     needs: terraform-apply
@@ -75,7 +74,7 @@ jobs:
       - name: Install Ansible
         run: |
           sudo apt-get update
-          sudo apt-get install -y python3-pip
+          sudo apt-get install -y python3-pip jq
           pip3 install --upgrade ansible
 
       - name: Save private key
@@ -84,7 +83,7 @@ jobs:
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/nachodele_ssh_key
           chmod 600 ~/.ssh/nachodele_ssh_key
 
-      - name: Generar inventory con IP del job terraform-apply
+      - name: Generar inventory con IP de Terraform
         working-directory: ${{ env.ANSIBLE_DIR }}
         run: |
           cat > inventory <<EOF
@@ -108,10 +107,11 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Comentar URL del entorno en el PR
+      - name: Comentar URL del entorno (si hay PR)
         uses: marocchino/sticky-pull-request-comment@v2
         with:
           header: env-url
+          number: ${{ fromJson(toJson(github.event.workflow_run.pull_requests))[0].number }}
           message: |
             Entorno efímero desplegado:
             - URL: ${{ needs.terraform-apply.outputs.url }}
