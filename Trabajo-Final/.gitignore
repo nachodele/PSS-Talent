@@ -3,6 +3,7 @@ Dev-Workspace/terraform/.terraform/
 Dev-Workspace/terraform/*.tfstate
 Dev-Workspace/terraform/*.tfstate.backup
 Dev-Workspace/terraform/crash.log
+Dev-Workspace/terraform/terraform.tfvars
 
 # Ansible
 Dev-Workspace/ansible/*.retry

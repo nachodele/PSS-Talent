@@ -19,12 +19,12 @@ resource "aws_key_pair" "pr_key" {
 }
 
 resource "aws_instance" "pr_instance" {
-  ami                         = data.aws_ami.ubuntu.id
-  instance_type               = "t3.micro"
-  subnet_id                   = aws_subnet.pr_subnet.id
-  vpc_security_group_ids      = [aws_security_group.pr_sg.id]
-  key_name                    = aws_key_pair.pr_key.key_name
-  
+  ami                    = data.aws_ami.ubuntu.id
+  instance_type          = "t3.micro"
+  subnet_id              = aws_subnet.pr_subnet.id
+  vpc_security_group_ids = [aws_security_group.pr_sg.id]
+  key_name               = aws_key_pair.pr_key.key_name
+
   root_block_device {
     volume_size = 8
     volume_type = "gp3"
