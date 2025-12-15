@@ -1,0 +1,47 @@
+---
+- name: Variables de despliegue app
+  ansible.builtin.set_fact:
+    app_repo_url: "https://github.com/mi-org/mi-api.git"   # CAMBIAR
+    app_repo_version: "main"                               # o rama/tag
+    app_base_dir: "/opt/pr-app"
+    app_container_name: "pr-app"
+    app_container_port: 80
+
+- name: Asegurar dependencias de Docker para Ansible
+  ansible.builtin.pip:
+    name: docker
+    state: present
+
+- name: Crear carpeta base de la app
+  ansible.builtin.file:
+    path: "{{ app_base_dir }}"
+    state: directory
+    owner: ubuntu
+    group: ubuntu
+    mode: "0755"
+
+- name: Clonar/actualizar repositorio de la app
+  ansible.builtin.git:
+    repo: "{{ app_repo_url }}"
+    dest: "{{ app_base_dir }}"
+    version: "{{ app_repo_version }}"
+    update: yes
+    force: yes
+
+- name: Construir imagen Docker de la app
+  community.docker.docker_image:
+    name: "pr-app-image"
+    build:
+      path: "{{ app_base_dir }}"
+    source: build
+    state: present
+
+- name: Asegurar contenedor de la app en ejecución
+  community.docker.docker_container:
+    name: "{{ app_container_name }}"
+    image: "pr-app-image:latest"
+    state: started
+    recreate: true
+    restart_policy: always
+    published_ports:
+      - "80:{{ app_container_port }}"

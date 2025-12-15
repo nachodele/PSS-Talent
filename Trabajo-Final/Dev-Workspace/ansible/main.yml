@@ -1,0 +1,7 @@
+---
+- name: Configurar entorno PR
+  hosts: pr_env
+
+  roles:
+    - docker
+    - app

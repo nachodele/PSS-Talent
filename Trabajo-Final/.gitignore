@@ -1,0 +1,14 @@
+# Terraform
+Dev-Workspace/terraform/.terraform/
+Dev-Workspace/terraform/*.tfstate
+Dev-Workspace/terraform/*.tfstate.backup
+Dev-Workspace/terraform/crash.log
+
+# Ansible
+Dev-Workspace/ansible/*.retry
+
+# Claves / secretos (por si acaso)
+*.pem
+*.key
+*.pub
+.env
