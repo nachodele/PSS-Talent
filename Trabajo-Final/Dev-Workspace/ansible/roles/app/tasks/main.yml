@@ -4,24 +4,57 @@
   apt:
     update_cache: yes
 
-- name: Instalar python3-pip PRIMERO (CRÍTICO para Docker module)
+- name: Instalar python3-pip PRIMERO
   become: true
   apt:
     name: python3-pip
     state: present
 
-- name: Instalar python3-dev para módulos compilados
+- name: Instalar python3-dev
   become: true
   apt:
     name: python3-dev
     state: present
 
-- name: Instalar librería docker para módulos de Ansible
+- name: Instalar librería docker para Ansible
   become: true
   ansible.builtin.pip:
     name: docker
     state: present
 
+# 🔧 DOCKER INSTALL + START (CRÍTICO)
+- name: Instalar Docker
+  become: true
+  apt:
+    name:
+      - apt-transport-https
+      - ca-certificates
+      - curl
+      - gnupg
+      - lsb-release
+      - docker.io
+    state: present
+
+- name: Agregar usuario ubuntu al grupo docker
+  become: true
+  user:
+    name: ubuntu
+    groups: docker
+    append: yes
+
+- name: Iniciar y habilitar Docker service
+  become: true
+  systemd:
+    name: docker
+    state: started
+    enabled: yes
+
+- name: Esperar a que Docker esté listo
+  become: true
+  docker_info:
+    api_version: auto
+
+# Tu código original ✅
 - name: Crear carpeta base de la app
   become: true
   ansible.builtin.file:
@@ -31,14 +64,14 @@
     group: ubuntu
     mode: "0755"
 
-- name: Clonar o actualizar repositorio de la app
+- name: Clonar o actualizar repositorio
   ansible.builtin.git:
     repo: "{{ app_repo_url }}"
     dest: "{{ app_base_dir }}/repo"
     version: "{{ app_repo_version }}"
     update: true
 
-- name: Copiar código de la app al directorio de build
+- name: Copiar código al directorio de build
   become: true
   ansible.builtin.copy:
     src: "{{ app_base_dir }}/repo/{{ app_repo_subdir }}/"
@@ -48,7 +81,7 @@
     mode: "0755"
     remote_src: true
 
-- name: Construir imagen Docker de la app
+- name: Construir imagen Docker
   community.docker.docker_image:
     name: "{{ app_image_name }}"
     build:
@@ -56,7 +89,7 @@
     source: build
     state: present
 
-- name: Asegurar contenedor de la app en ejecución
+- name: Asegurar contenedor ejecutándose
   community.docker.docker_container:
     name: "{{ app_container_name }}"
     image: "{{ app_image_name }}:latest"
