@@ -106,3 +106,6 @@
     restart_policy: always
     published_ports:
       - "80:{{ app_container_port }}"
+    env:
+      PR_ID: "{{ app_repo_version }}"
+      GIT_SHA: "{{ app_repo_version }}"
