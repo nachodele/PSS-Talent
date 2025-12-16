@@ -17,6 +17,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Descarga el artefacto pr_num del workflow que acaba de terminar (CD),
+      # que a su vez heredó el artefacto del CI.[web:38][web:72]
       - name: Descargar artifact con PR number
         uses: dawidd6/action-download-artifact@v3
         with:
