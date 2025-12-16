@@ -22,51 +22,47 @@ jobs:
     outputs:
       ip: ${{ steps.tf-out.outputs.ip }}
       url: ${{ steps.tf-out.outputs.url }}
-      pr_id: ${{ steps.pr.outputs.pr_id }}
     env:
       TERRAFORM_DIR: ./Trabajo-Final/Dev-Workspace/terraform
 
     steps:
-      - name: Checkout repoo
+      - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Extraer PR_ID (si hay PR) o usar 0
-        id: pr
-        run: |
-          PR_NUMBER=$(jq '.[0].pull_requests[0].number // 0' <<< '${{ toJson(github.event.workflow_run.pull_requests) }}')
-          echo "pr_id=$PR_NUMBER" >> $GITHUB_OUTPUT
-          echo "PR_ID encontrado: $PR_NUMBER"
+      - name: Find PR (si existe)
+        id: pr-finder
+        uses: jwalton/gh-find-current-pr@v5
+
+      - name: Debug PR
+        run: echo "PR encontrado: ${{ steps.pr-finder.outputs.pr }}"
 
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.7.0
 
-      - name: Terraform Init (backend remoto)
-        env:
-          PR_ID: ${{ steps.pr.outputs.pr_id }}
+      - name: Terraform Init
         run: terraform -chdir=${{ env.TERRAFORM_DIR }} init
 
       - name: Terraform Apply
         env:
-          PR_ID: ${{ steps.pr.outputs.pr_id }}
+          PR_ID: ${{ steps.pr-finder.outputs.pr }}
         run: |
           terraform -chdir=${{ env.TERRAFORM_DIR }} apply -auto-approve \
-            -var="pr_id=${PR_ID}" \
+            -var="pr_id=${PR_ID:-0}" \
             -var="ssh_public_key=${{ secrets.SSH_PUBLIC_KEY }}" \
             -var="allowed_ssh_cidr=0.0.0.0/0"
 
-      - name: Export Terraform outputs
+      - name: Export outputs
         id: tf-out
         run: |
           cd ${{ env.TERRAFORM_DIR }}
           echo "ip=$(terraform output -raw instance_public_ip)" >> $GITHUB_OUTPUT
           echo "url=$(terraform output -raw url_entorno)" >> $GITHUB_OUTPUT
-          echo "pr_id=${{ steps.pr.outputs.pr_id }}" >> $GITHUB_OUTPUT
 
   ansible-deploy:
     needs: terraform-apply
-    if: ${{ github.event.workflow_run.conclusion == 'success' && needs.terraform-apply.outputs.pr_id != '0' }}
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     env:
       ANSIBLE_DIR: ./Trabajo-Final/Dev-Workspace/ansible
@@ -75,75 +71,59 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Debug PR_ID recibido
+      - name: Debug inputs
         run: |
-          echo "PR_ID de Terraform: ${{ needs.terraform-apply.outputs.pr_id }}"
-          echo "IP de Terraform: ${{ needs.terraform-apply.outputs.ip }}"
+          echo "IP: ${{ needs.terraform-apply.outputs.ip }}"
+          echo "URL: ${{ needs.terraform-apply.outputs.url }}"
 
       - name: Install Ansible
         run: |
           sudo apt-get update
           sudo apt-get install -y python3-pip jq
-          pip3 install --upgrade ansible
+          pip3 install ansible
 
-      - name: Save private key
+      - name: Setup SSH key
         run: |
           mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/nachodele_ssh_key
-          chmod 600 ~/.ssh/nachodele_ssh_key
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
 
-      - name: Find current PR (fallback)
-        id: finder
-        if: needs.terraform-apply.outputs.pr_id == '0'
-        uses: jwalton/gh-find-current-pr@v5
-
-      - name: Use PR_ID final
-        id: final-pr
+      - name: Create inventory
         run: |
-          FINAL_PR_ID=${{ needs.terraform-apply.outputs.pr_id != '0' && needs.terraform-apply.outputs.pr_id || steps.finder.outputs.pr }}
-          echo "final_pr_id=$FINAL_PR_ID" >> $GITHUB_OUTPUT
-          echo "Usando PR_ID final: $FINAL_PR_ID"
-
-      - name: Generar inventory con IP de Terraform
-        working-directory: ${{ env.ANSIBLE_DIR }}
-        run: |
-          cat > inventory <<EOF
-          [pr_env]
-          pr_vm ansible_host=${{ needs.terraform-apply.outputs.ip }} ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/nachodele_ssh_key
+          cat > inventory.ini << EOF
+          [pr_vm]
+          vm ansible_host=${{ needs.terraform-apply.outputs.ip }} ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/id_rsa
           EOF
-          cat inventory  # Debug
+          cat inventory.ini
 
-      - name: Ejecutar Ansible (Docker + app)
-        working-directory: ${{ env.ANSIBLE_DIR }}
-        env:
-          ANSIBLE_HOST_KEY_CHECKING: "False"
-          PR_ID: ${{ steps.final-pr.outputs.final_pr_id }}
+      - name: Run Ansible
         run: |
-          echo "Ejecutando Ansible con PR_ID: $PR_ID"
-          ansible-playbook main.yml -e "pr_id=$PR_ID"
+          ansible-playbook -i inventory.ini ${{ env.ANSIBLE_DIR }}/main.yml \
+            --private-key ~/.ssh/id_rsa \
+            -e "ansible_ssh_common_args='-o StrictHostKeyChecking=no'"
 
-      - name: Clean up private key
+      - name: Cleanup
         if: always()
-        run: rm -f ~/.ssh/nachodele_ssh_key
+        run: rm -f ~/.ssh/id_rsa
 
   pr-comment:
     needs: terraform-apply
-    if: ${{ github.event.workflow_run.conclusion == 'success' && needs.terraform-apply.outputs.pr_id != '0' }}
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
 
     steps:
-      - name: Find current PR for comment
-        id: finder
+      - name: Find PR
+        id: pr
         uses: jwalton/gh-find-current-pr@v5
 
-      - name: Comentar URL del entorno (si hay PR)
-        if: steps.finder.outputs.pr != '0'
+      - name: Comment PR (if exists)
+        if: steps.pr.outputs.pr != '0'
         uses: marocchino/sticky-pull-request-comment@v2
         with:
           header: env-url
-          number: ${{ steps.finder.outputs.pr }}
+          number: ${{ steps.pr.outputs.pr }}
           message: |
-            Entorno efímero desplegado:
+            **Entorno efímero desplegado**
             - IP: ${{ needs.terraform-apply.outputs.ip }}
             - URL: ${{ needs.terraform-apply.outputs.url }}
             - PR ID: ${{ needs.terraform-apply.outputs.pr_id }}
