@@ -10,6 +10,11 @@ permissions:
   contents: read
   pull-requests: write
 
+env:
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
 jobs:
   terraform-apply:
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
@@ -17,28 +22,32 @@ jobs:
     outputs:
       ip: ${{ steps.tf-out.outputs.ip }}
       url: ${{ steps.tf-out.outputs.url }}
-    steps:
-      - uses: actions/checkout@v4
+    env:
+      TERRAFORM_DIR: ./Trabajo-Final/Dev-Workspace/terraform
 
-      - uses: hashicorp/setup-terraform@v3
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.7.0
 
-      - name: Terraform Init
-        run: terraform -chdir=./Trabajo-Final/Dev-Workspace/terraform init
+      - name: Terraform Init (backend remoto)
+        run: terraform -chdir=${{ env.TERRAFORM_DIR }} init
 
       - name: Terraform Apply
         run: |
-          cd ./Trabajo-Final/Dev-Workspace/terraform
-          terraform apply -auto-approve \
+          terraform -chdir=${{ env.TERRAFORM_DIR }} apply -auto-approve \
             -var="pr_id=0" \
             -var="ssh_public_key=${{ secrets.SSH_PUBLIC_KEY }}" \
             -var="allowed_ssh_cidr=0.0.0.0/0"
 
-      - name: Export outputs
+      - name: Export Terraform outputs
         id: tf-out
         run: |
-          cd ./Trabajo-Final/Dev-Workspace/terraform
+          cd ${{ env.TERRAFORM_DIR }}
           echo "ip=$(terraform output -raw instance_public_ip)" >> $GITHUB_OUTPUT
           echo "url=$(terraform output -raw url_entorno)" >> $GITHUB_OUTPUT
 
@@ -46,36 +55,42 @@ jobs:
     needs: terraform-apply
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
+    env:
+      ANSIBLE_DIR: ./Trabajo-Final/Dev-Workspace/ansible
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repo
+        uses: actions/checkout@v4
 
       - name: Install Ansible
         run: |
-          sudo apt update
-          sudo apt install -y python3-pip
-          pip3 install ansible
+          sudo apt-get update
+          sudo apt-get install -y python3-pip jq
+          pip3 install --upgrade ansible
 
-      - name: Setup SSH
+      - name: Save private key
         run: |
           mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/nachodele_ssh_key
+          chmod 600 ~/.ssh/nachodele_ssh_key
 
-      - name: Create inventory
+      - name: Generar inventory con IP de Terraform
+        working-directory: ${{ env.ANSIBLE_DIR }}
         run: |
-          cat > inventory.ini << EOF
-          [pr_vm]
-          vm ansible_host=${{ needs.terraform-apply.outputs.ip }} ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/id_rsa
+          cat > inventory <<EOF
+          [pr_env]
+          pr_vm ansible_host=${{ needs.terraform-apply.outputs.ip }} ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/nachodele_ssh_key
           EOF
 
-      - name: Run Ansible
-        run: |
-          ansible-playbook -i inventory.ini ./Trabajo-Final/Dev-Workspace/ansible/main.yml \
-            -e "ansible_ssh_common_args='-o StrictHostKeyChecking=no'"
+      - name: Ejecutar Ansible (Docker + app)
+        working-directory: ${{ env.ANSIBLE_DIR }}
+        env:
+          ANSIBLE_HOST_KEY_CHECKING: "False"
+        run: ansible-playbook main.yml
 
-      - name: Cleanup
+      - name: Clean up private key
         if: always()
-        run: rm -f ~/.ssh/id_rsa
+        run: rm -f ~/.ssh/nachodele_ssh_key
 
   notify-n8n:
     needs: [terraform-apply, ansible-deploy]
