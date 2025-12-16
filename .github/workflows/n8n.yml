@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Get PR details
+      - name: Get PR details (title/body)
         id: pr
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -37,6 +37,24 @@ jobs:
           echo "pr_title=$CLEAN_TITLE" >> $GITHUB_OUTPUT
           echo "pr_body=$CLEAN_BODY" >> $GITHUB_OUTPUT
 
+      - name: Get PR diff (code changes)
+        id: diff
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PR_NUMBER=${{ steps.pr.outputs.pr_number }}
+          REPO=${{ github.repository }}
+
+          # Obtener diff completo del PR
+          curl -s \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github.v3.diff" \
+            "https://api.github.com/repos/$REPO/pulls/$PR_NUMBER" > pr.diff
+
+          # Recortar y sanear para meter en JSON
+          DIFF=$(head -c 50000 pr.diff | tr '\n' ' ' | sed 's/"/\\"/g')
+          echo "pr_diff=$DIFF" >> $GITHUB_OUTPUT
+
       - name: Call n8n PR risk flow
         id: n8n
         run: |
@@ -46,7 +64,8 @@ jobs:
               \"pr_number\": \"${{ steps.pr.outputs.pr_number }}\",
               \"pr_title\": \"${{ steps.pr.outputs.pr_title }}\",
               \"pr_body\": \"${{ steps.pr.outputs.pr_body }}\",
-              \"repo\": \"${{ github.repository }}\",
+              \"pr_diff\": \"${{ steps.diff.outputs.pr_diff }}\",
+              \"repo\": \"{{ github.repository }}\",
               \"sha\": \"${{ github.event.workflow_run.head_sha }}\"
             }")
 
