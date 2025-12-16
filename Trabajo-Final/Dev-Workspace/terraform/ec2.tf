@@ -37,8 +37,7 @@ resource "aws_instance" "pr_instance" {
   subnet_id              = aws_subnet.pr_subnet.id
   vpc_security_group_ids = [aws_security_group.pr_sg.id]
 
-  key_name = aws_key_pair.generated_key.key_name
-
+  key_name = "ssh_key_nachodele"
   root_block_device {
     volume_size = 8
     volume_type = "gp3"
