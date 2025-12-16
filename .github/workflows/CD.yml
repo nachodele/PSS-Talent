@@ -67,23 +67,23 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Install Ansible & AWS libs
+      - name: Install Ansible 8.x (Python 3.8 compatible) & AWS libs
         run: |
           sudo apt-get update
           sudo apt-get install -y python3-pip sshpass
-          pip3 install --upgrade ansible[all] boto3 botocore ansible-lint
+          pip3 install "ansible-core==2.15.12" "ansible==8.7.0" boto3 botocore ansible-lint
 
       - name: Save private key
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.EC2_SSH_PRIVATE_KEY }}" > ~/.ssh/ssh_key_nachodele.pem
-          chmod 400 ~/.ssh/ssh_key_nachodele.pem  # ✅ Permisos correctos
+          chmod 400 ~/.ssh/ssh_key_nachodele.pem
 
       - name: Lint Ansible playbooks
         working-directory: ${{ env.ANSIBLE_DIR }}
         run: ansible-lint .
 
-      - name: Generar inventory con IP de Terraform + PYTHON FIX
+      - name: Generar inventory con IP de Terraform + PYTHON 3.8 FIX
         working-directory: ${{ env.ANSIBLE_DIR }}
         run: |
           cat > inventory <<EOF
@@ -92,7 +92,7 @@ jobs:
           EOF
           cat inventory  # Debug
 
-      - name: Run Ansible playbook
+      - name: Run Ansible playbook (Python 3.8 compatible)
         env:
           ANSIBLE_HOST_KEY_CHECKING: "False"
         working-directory: ${{ env.ANSIBLE_DIR }}
@@ -102,7 +102,7 @@ jobs:
             --user ubuntu \
             -e "ansible_python_interpreter=/usr/bin/python3" \
             main.yml \
-            -vvv  # Debug verbose
+            -vvv
 
       - name: Clean up private key
         if: always()
