@@ -10,7 +10,8 @@ def health():
 @app.route("/version")
 def version():
     pr_id = os.environ.get("PR_ID", "local")
-    return jsonify(version=f"PR-{pr_id}"), 200
+    sha = os.environ.get("GIT_SHA", "unknown")
+    return jsonify(version=pr_id, sha=sha), 200
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", "5000"))
