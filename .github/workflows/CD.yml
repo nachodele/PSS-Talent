@@ -1,10 +1,11 @@
 name: CD - Entorno efímero
 
 on:
-  workflow_run:
-    workflows: ["CI - Infra y Config"]
-    types:
-      - completed
+  workflow_dispatch:
+  #workflow_run:
+   # workflows: ["CI - Infra y Config"]
+    #types:
+     # - completed
 
 permissions:
   contents: read
@@ -16,11 +17,12 @@ env:
   AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
 jobs:
-  terraform-apply:
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+  terraform:
+   # if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     env:
       TERRAFORM_DIR: ./Trabajo-Final/Dev-Workspace/terraform
+
     outputs:
       ip: ${{ steps.tf-out.outputs.ip }}
       url: ${{ steps.tf-out.outputs.url }}
@@ -34,14 +36,20 @@ jobs:
         with:
           terraform_version: 1.7.0
 
-      - name: Terraform Init (backend remoto)
+      - name: Terraform FMT Check
+        run: terraform -chdir=${{ env.TERRAFORM_DIR }} fmt -recursive -check
+
+      - name: Terraform init
         run: terraform -chdir=${{ env.TERRAFORM_DIR }} init
 
-      - name: Terraform Apply
-        run: |
-          terraform -chdir=${{ env.TERRAFORM_DIR }} apply -auto-approve \
-            -var="pr_id=0" \
-            -var="allowed_ssh_cidr=0.0.0.0/0"
+      - name: Terraform validate
+        run: terraform -chdir=${{ env.TERRAFORM_DIR }} validate
+
+      - name: Terraform plan
+        run: terraform -chdir=${{ env.TERRAFORM_DIR }} plan -input=false
+
+      - name: Terraform apply
+        run: terraform -chdir=${{ env.TERRAFORM_DIR }} apply -auto-approve -input=false
 
       - name: Export Terraform outputs
         id: tf-out
@@ -50,9 +58,9 @@ jobs:
           echo "ip=$(terraform output -raw instance_public_ip)" >> $GITHUB_OUTPUT
           echo "url=$(terraform output -raw url_entorno)" >> $GITHUB_OUTPUT
 
-  ansible-deploy:
-    needs: terraform-apply
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+  ansible:
+    needs: terraform
+    #if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     env:
       ANSIBLE_DIR: ./Trabajo-Final/Dev-Workspace/ansible
@@ -67,13 +75,13 @@ jobs:
           sudo apt-get install -y python3-pip
           pip3 install --upgrade ansible boto3 botocore ansible-lint
 
-      - name: Save private key (mismo patrón que el CI antiguo)
+      - name: Save private key
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.EC2_SSH_PRIVATE_KEY }}" > ~/.ssh/nachodele_ssh_key
           chmod 600 ~/.ssh/nachodele_ssh_key
 
-      - name: Lint Ansible playbooks (opcional)
+      - name: Lint Ansible playbooks
         working-directory: ${{ env.ANSIBLE_DIR }}
         run: ansible-lint .
 
@@ -82,30 +90,26 @@ jobs:
         run: |
           cat > inventory <<EOF
           [pr_env]
-          pr_vm ansible_host=${{ needs.terraform-apply.outputs.ip }} ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/nachodele_ssh_key
+          pr_vm ansible_host=${{ needs.terraform.outputs.ip }} ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/nachodele_ssh_key
           EOF
 
-      - name: Ejecutar Ansible (Docker + app)
-        working-directory: ${{ env.ANSIBLE_DIR }}
+      - name: Run Ansible playbook
         env:
           ANSIBLE_HOST_KEY_CHECKING: "False"
-        run: |
-          ansible-playbook main.yml \
-            -i inventory \
-            -u ubuntu \
-            --private-key ~/.ssh/nachodele_ssh_key
+        working-directory: ${{ env.ANSIBLE_DIR }}
+        run: ansible-playbook -i inventory -u ubuntu --private-key ~/.ssh/nachodele_ssh_key main.yml
 
       - name: Clean up private key
         if: always()
         run: rm -f ~/.ssh/nachodele_ssh_key
 
   notify-n8n:
-    needs: [terraform-apply, ansible-deploy]
+    needs: [terraform, ansible]
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
 
     steps:
-      - name: Find PR with GH CLI
+      - name: Find PR (por rama del workflow origen)
         id: pr-info
         run: |
           PR_NUMBER=$(gh pr list --state open --json headRefName,number --jq \
@@ -124,6 +128,6 @@ jobs:
               "repo": "${{ github.repository }}",
               "sha": "${{ github.event.workflow_run.head_sha }}",
               "status": "deployed",
-              "ip": "${{ needs.terraform-apply.outputs.ip }}",
-              "url": "${{ needs.terraform-apply.outputs.url }}"
+              "ip": "${{ needs.terraform.outputs.ip }}",
+              "url": "${{ needs.terraform.outputs.url }}"
             }'
