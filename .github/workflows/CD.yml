@@ -86,6 +86,7 @@ jobs:
             --private-key ~/.ssh/ssh_key_nachodele.pem \
             --user ubuntu \
             -e "ansible_python_interpreter=/usr/bin/python3" \
+            -e "app_repo_version=${{ github.event.workflow_run.head_sha }}" \
             main.yml \
             -vvv
 
