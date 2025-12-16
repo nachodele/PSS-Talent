@@ -52,15 +52,17 @@ jobs:
 
           echo "n8n_response=$RESPONSE" >> $GITHUB_OUTPUT
 
-      # Opcional: comentar en el PR con la decisión de riesgo devuelta por n8n
-      - name: Comment PR with risk
+      - name: Comment PR with risk and enforce result
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           PR_NUMBER=${{ steps.pr.outputs.pr_number }}
-          RISK=$(echo '${{ steps.n8n.outputs.n8n_response }}' | jq -r '.risk_level // "unknown"')
-          MSG=$(echo '${{ steps.n8n.outputs.n8n_response }}' | jq -r '.message // "Análisis completado por n8n."')
+          RESPONSE='${{ steps.n8n.outputs.n8n_response }}'
 
+          RISK=$(echo "$RESPONSE" | jq -r '.risk_level // "unknown"')
+          MSG=$(echo "$RESPONSE" | jq -r '.message // "Análisis completado por n8n."')
+
+          # Comentar en el PR
           curl -s -X POST \
             -H "Authorization: Bearer $GH_TOKEN" \
             -H "Accept: application/vnd.github+json" \
@@ -68,3 +70,11 @@ jobs:
             -d "{
               \"body\": \"n8n ha clasificado este PR como: **$RISK**.\\n\\n$MSG\"
             }"
+
+          # Si riesgo crítico → fallar job para bloquear merge
+          if [ "$RISK" = "critico" ] || [ "$RISK" = "critical" ]; then
+            echo "PR marcado como riesgo crítico; fallando job para forzar revisión humana."
+            exit 1
+          fi
+
+          echo "PR de riesgo bajo; check n8n OK."
