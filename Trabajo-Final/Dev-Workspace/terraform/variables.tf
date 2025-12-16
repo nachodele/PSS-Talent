@@ -7,11 +7,7 @@ variable "aws_region" {
 variable "pr_id" {
   description = "GitHub PR number"
   type        = string
-}
-
-variable "ssh_public_key" {
-  description = "Contenido ~/.ssh/nachodele_ssh_key.pub"
-  type        = string
+  default     = "0"    # ← ya no es obligatorio
 }
 
 variable "allowed_ssh_cidr" {

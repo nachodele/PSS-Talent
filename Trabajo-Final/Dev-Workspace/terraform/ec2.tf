@@ -13,17 +13,31 @@ data "aws_ami" "ubuntu" {
   }
 }
 
-resource "aws_key_pair" "pr_key" {
-  key_name   = "pr-${var.pr_id}-nachodele"
-  public_key = var.ssh_public_key
+
+resource "tls_private_key" "ssh_key" {
+  algorithm = "RSA"
+  rsa_bits  = 4096
 }
+
+resource "aws_key_pair" "generated_key" {
+  key_name   = "ssh_key_nachodele"
+  public_key = tls_private_key.ssh_key.public_key_openssh
+}
+
+resource "local_file" "private_key_pem" {
+  content         = tls_private_key.ssh_key.private_key_pem
+  filename        = "${path.module}/ssh_key_nachodele.pem"
+  file_permission = "0400"
+}
+
 
 resource "aws_instance" "pr_instance" {
   ami                    = data.aws_ami.ubuntu.id
   instance_type          = "t3.micro"
   subnet_id              = aws_subnet.pr_subnet.id
   vpc_security_group_ids = [aws_security_group.pr_sg.id]
-  key_name               = aws_key_pair.pr_key.key_name
+
+  key_name = aws_key_pair.generated_key.key_name
 
   root_block_device {
     volume_size = 8
