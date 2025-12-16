@@ -14,6 +14,7 @@ env:
   AWS_REGION: ${{ secrets.AWS_REGION }}
   AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
   AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+  SSH_PUBLIC_KEY: "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQCiaZL/31r1TvVi/4OXevkMYraxq457OUC+uz0KaNf4BHFqV6ZmsLrSQCK8IfNHzvJcE9QhMSYTsi0bQ/bwAemF6HSH5ClwqmLB6GY0WMZ2teC8o3/G9u1AweY0wzVlCYPQH8i9It/WGOk3gCEFPuNp6gZg5831Pl3MFFRxAmuNx4iD4n1WQ+MFltIbvuQ4lA2/e4v8mmdt65q70iWVsFzzxV58W5Xv0sqrNf5MS1/ciO2m/WCDE8eTzVd6iBV5z6FGvdAKCMyxP3wPs2moV/2E6+jKQJ9GsCJ0qPA/UgI5lx+El98g8hQkLf9fK3TqzzPgos/KFvStAA5Nq6hl/aR6kX20TsfV7zUl0MshqtFMa6VYCEJcPHWtBwskLl5QED+zBEnMJxkQJcnnk1pXuvurTS1RGKa+O9xanw+te1jDVlEHzSfCvc1Uke/NwfRnI0pd1adYn9LFyxsH/N9kSRYdm7p7T9oRGuuW3jK/92yYRK3vauLR2lSfzAn5+HEjTwgc67K1mxrz+AS9ecHUMQ1geE0SRjqUh0C/vsKn9kmjlLoDCUg5Syef+EHIZ9HtRGnYxxxv2imNCa32OPi5jGoSxMnCblZ9rmfwObzGR36UWFUbGnf4cqPezYg+3o13x+zFDc8eDvTctysrkuic42qCLi+SsC1lLgbgUM//Eq0BZw== vagrant@control"
 
 jobs:
   terraform-apply:
@@ -41,7 +42,7 @@ jobs:
         run: |
           terraform -chdir=${{ env.TERRAFORM_DIR }} apply -auto-approve \
             -var="pr_id=0" \
-            -var="ssh_public_key=${{ secrets.SSH_PUBLIC_KEY }}" \
+            -var="ssh_public_key=$SSH_PUBLIC_KEY" \
             -var="allowed_ssh_cidr=0.0.0.0/0"
 
       - name: Export Terraform outputs
@@ -57,40 +58,47 @@ jobs:
     runs-on: ubuntu-latest
     env:
       ANSIBLE_DIR: ./Trabajo-Final/Dev-Workspace/ansible
+      SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}  # ← Solo private key como secret
 
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Install Ansible
+      - name: Install Ansible + SSH
         run: |
           sudo apt-get update
-          sudo apt-get install -y python3-pip jq
+          sudo apt-get install -y python3-pip jq openssh-client
           pip3 install --upgrade ansible
 
-      - name: Save private key
+      - name: Setup SSH key
         run: |
           mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/nachodele_ssh_key
-          chmod 600 ~/.ssh/nachodele_ssh_key
+          echo "$SSH_PRIVATE_KEY" | tr -d '\r' > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keygen -y -f ~/.ssh/id_rsa > ~/.ssh/id_rsa.pub
 
-      - name: Generar inventory con IP de Terraform
+      - name: Test SSH connection
+        run: |
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa ubuntu@${{ needs.terraform-apply.outputs.ip }} "echo 'SSH OK'"
+
+      - name: Generar inventory
         working-directory: ${{ env.ANSIBLE_DIR }}
         run: |
           cat > inventory <<EOF
           [pr_env]
-          pr_vm ansible_host=${{ needs.terraform-apply.outputs.ip }} ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/nachodele_ssh_key
+          pr_vm ansible_host=${{ needs.terraform-apply.outputs.ip }} ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/id_rsa
           EOF
 
-      - name: Ejecutar Ansible (Docker + app)
+      - name: Ejecutar Ansible
         working-directory: ${{ env.ANSIBLE_DIR }}
-        env:
-          ANSIBLE_HOST_KEY_CHECKING: "False"
-        run: ansible-playbook main.yml
+        run: |
+          ansible-playbook main.yml \
+            --private-key ~/.ssh/id_rsa \
+            --ssh-extra-args="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
 
-      - name: Clean up private key
+      - name: Clean up
         if: always()
-        run: rm -f ~/.ssh/nachodele_ssh_key
+        run: rm -rf ~/.ssh/*
 
   notify-n8n:
     needs: [terraform-apply, ansible-deploy]
@@ -102,7 +110,6 @@ jobs:
         run: |
           PR_NUMBER=$(gh pr list --head ${{ github.event.workflow_run.head_sha }} --json number --jq '.[0].number // 0')
           echo "pr_number=$PR_NUMBER" >> $GITHUB_OUTPUT
-          echo "PR detectado: $PR_NUMBER"
 
       - name: Notify n8n
         if: steps.pr-info.outputs.pr_number != '0'
@@ -115,6 +122,5 @@ jobs:
               "sha": "${{ github.event.workflow_run.head_sha }}",
               "status": "deployed",
               "ip": "${{ needs.terraform-apply.outputs.ip }}",
-              "url": "${{ needs.terraform-apply.outputs.url }}",
-              "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+              "url": "${{ needs.terraform-apply.outputs.url }}"
             }'
