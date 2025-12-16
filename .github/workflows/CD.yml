@@ -73,7 +73,7 @@ jobs:
           sudo apt-get install -y python3-pip sshpass
           pip3 install "ansible-core==2.15.12" "ansible==8.7.0" boto3 botocore ansible-lint
 
-      - name: Save private key
+      - name: Save private key ✅ SSH FUNCIONA
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.EC2_SSH_PRIVATE_KEY }}" > ~/.ssh/ssh_key_nachodele.pem
@@ -83,7 +83,7 @@ jobs:
         working-directory: ${{ env.ANSIBLE_DIR }}
         run: ansible-lint .
 
-      - name: Generar inventory con IP de Terraform + PYTHON 3.8 FIX
+      - name: Generar inventory con IP de Terraform + PYTHON 3.8 ✅
         working-directory: ${{ env.ANSIBLE_DIR }}
         run: |
           cat > inventory <<EOF
@@ -92,7 +92,7 @@ jobs:
           EOF
           cat inventory  # Debug
 
-      - name: Run Ansible playbook (Python 3.8 compatible)
+      - name: Run Ansible playbook ✅ PIP FIX incluido en rol
         env:
           ANSIBLE_HOST_KEY_CHECKING: "False"
         working-directory: ${{ env.ANSIBLE_DIR }}
