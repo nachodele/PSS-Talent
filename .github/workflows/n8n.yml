@@ -15,80 +15,140 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Checkout (solo para tener gh, jq, etc.)
+        uses: actions/checkout@v4
+
       - name: Get PR details (title/body)
         id: pr
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          PR_NUMBER=${{ github.event.workflow_run.pull_requests[0].number }}
-          REPO=${{ github.repository }}
+          set -e
 
-          curl -s -H "Authorization: Bearer $GH_TOKEN" \
-               -H "Accept: application/vnd.github+json" \
-               "https://api.github.com/repos/$REPO/pulls/$PR_NUMBER" > pr.json
+          # Intento directo con workflow_run.pull_requests[0]
+          PR_NUMBER="${{ github.event.workflow_run.pull_requests[0].number || '' }}"
 
-          TITLE=$(jq -r '.title' pr.json)
-          BODY=$(jq -r '.body' pr.json)
+          # Fallback: intentar encontrar PR por head_sha si viene vacío (p.ej. forks) [limitado, puede no funcionar siempre].[web:6]
+          if [ -z "$PR_NUMBER" ]; then
+            echo "No PR in workflow_run.pull_requests, intentando buscar por head_sha..."
+            PR_NUMBER="$(gh pr list \
+              --repo "${{ github.repository }}" \
+              --search "${{ github.event.workflow_run.head_branch }}" \
+              --json number,headRefName \
+              --jq '.[0].number' 2>/dev/null || echo '')"
+          fi
 
-          CLEAN_TITLE=$(echo "$TITLE" | tr '\n' ' ' | sed 's/"/\\"/g')
-          CLEAN_BODY=$(echo "$BODY" | tr '\n' ' ' | sed 's/"/\\"/g')
+          if [ -z "$PR_NUMBER" ]; then
+            echo "No se ha podido determinar el número de PR. Saliendo."
+            exit 1
+          fi
 
-          echo "pr_number=$PR_NUMBER" >> $GITHUB_OUTPUT
-          echo "pr_title=$CLEAN_TITLE" >> $GITHUB_OUTPUT
-          echo "pr_body=$CLEAN_BODY" >> $GITHUB_OUTPUT
+          echo "PR_NUMBER=$PR_NUMBER"
+
+          REPO="${{ github.repository }}"
+
+          curl -s \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$REPO/pulls/$PR_NUMBER" > pr.json
+
+          TITLE=$(jq -r '.title // ""' pr.json)
+          BODY=$(jq -r '.body // ""' pr.json)
+
+          # No escapamos manualmente comillas; eso se hará al construir el JSON con jq
+          echo "pr_number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
+          echo "pr_title<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$TITLE" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+          echo "pr_body<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$BODY" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
 
       - name: Get PR diff (code changes)
         id: diff
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          PR_NUMBER=${{ steps.pr.outputs.pr_number }}
-          REPO=${{ github.repository }}
+          set -e
 
-          # Obtener diff completo del PR
+          PR_NUMBER="${{ steps.pr.outputs.pr_number }}"
+          REPO="${{ github.repository }}"
+
           curl -s \
             -H "Authorization: Bearer $GH_TOKEN" \
             -H "Accept: application/vnd.github.v3.diff" \
             "https://api.github.com/repos/$REPO/pulls/$PR_NUMBER" > pr.diff
 
-          # Recortar y sanear para meter en JSON
-          DIFF=$(head -c 50000 pr.diff | tr '\n' ' ' | sed 's/"/\\"/g')
-          echo "pr_diff=$DIFF" >> $GITHUB_OUTPUT
+          # Recortar para no petar el payload, pero sin romper líneas
+          head -c 50000 pr.diff > pr_trimmed.diff
+
+          echo "pr_diff<<EOF" >> "$GITHUB_OUTPUT"
+          cat pr_trimmed.diff >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
 
       - name: Call n8n PR risk flow
         id: n8n
         run: |
+          set -e
+
+          # Construimos el JSON de forma segura con jq para evitar problemas de comillas/escapes.[web:23][web:31]
+          jq -n \
+            --arg pr_number "${{ steps.pr.outputs.pr_number }}" \
+            --arg pr_title "${{ steps.pr.outputs.pr_title }}" \
+            --arg pr_body "${{ steps.pr.outputs.pr_body }}" \
+            --arg pr_diff "${{ steps.diff.outputs.pr_diff }}" \
+            --arg repo "${{ github.repository }}" \
+            --arg sha "${{ github.event.workflow_run.head_sha }}" \
+            '{
+              pr_number: $pr_number,
+              pr_title: $pr_title,
+              pr_body: $pr_body,
+              pr_diff: $pr_diff,
+              repo: $repo,
+              sha: $sha
+            }' > payload.json
+
+          echo "Payload que se envía a n8n:"
+          cat payload.json
+
           RESPONSE=$(curl -s -X POST "https://n8n8.alpinia.digital/webhook-test/bb734fe9-d0e1-4e8c-ad1f-452ca8b36427" \
             -H "Content-Type: application/json" \
-            -d "{
-              \"pr_number\": \"${{ steps.pr.outputs.pr_number }}\",
-              \"pr_title\": \"${{ steps.pr.outputs.pr_title }}\",
-              \"pr_body\": \"${{ steps.pr.outputs.pr_body }}\",
-              \"pr_diff\": \"${{ steps.diff.outputs.pr_diff }}\",
-              \"repo\": \"{{ github.repository }}\",
-              \"sha\": \"${{ github.event.workflow_run.head_sha }}\"
-            }")
+            -d @payload.json)
 
-          echo "n8n_response=$RESPONSE" >> $GITHUB_OUTPUT
+          echo "Respuesta de n8n:"
+          echo "$RESPONSE"
+
+          # Guardamos la respuesta completa como output multilinea.
+          echo "n8n_response<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$RESPONSE" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
 
       - name: Comment PR with risk and enforce result
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          PR_NUMBER=${{ steps.pr.outputs.pr_number }}
+          set -e
+
+          PR_NUMBER="${{ steps.pr.outputs.pr_number }}"
           RESPONSE='${{ steps.n8n.outputs.n8n_response }}'
 
+          echo "Respuesta n8n (para parsear):"
+          echo "$RESPONSE"
+
+          # Parsear JSON devuelto por n8n
           RISK=$(echo "$RESPONSE" | jq -r '.risk_level // "unknown"')
           MSG=$(echo "$RESPONSE" | jq -r '.message // "Análisis completado por n8n."')
+
+          echo "Riesgo detectado: $RISK"
+          echo "Mensaje: $MSG"
 
           # Comentar en el PR
           curl -s -X POST \
             -H "Authorization: Bearer $GH_TOKEN" \
             -H "Accept: application/vnd.github+json" \
-            https://api.github.com/repos/${{ github.repository }}/issues/$PR_NUMBER/comments \
-            -d "{
-              \"body\": \"n8n ha clasificado este PR como: **$RISK**.\\n\\n$MSG\"
-            }"
+            "https://api.github.com/repos/${{ github.repository }}/issues/$PR_NUMBER/comments" \
+            -d "$(jq -n --arg risk "$RISK" --arg msg "$MSG" \
+              '{ body: ("n8n ha clasificado este PR como: **" + $risk + "**.\n\n" + $msg) }')"
 
           # Si riesgo crítico → fallar job para bloquear merge
           if [ "$RISK" = "critico" ] || [ "$RISK" = "critical" ]; then
@@ -96,4 +156,4 @@ jobs:
             exit 1
           fi
 
-          echo "PR de riesgo bajo; check n8n OK."
+          echo "PR de riesgo no crítico; check n8n OK."
