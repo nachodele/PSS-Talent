@@ -139,6 +139,6 @@ jobs:
             await github.rest.actions.createWorkflowDispatch({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              workflow_id: 'ci-infra-config.yml', // nombre del fichero del CI
+              workflow_id: 'CI.yml',
               ref: context.payload.pull_request.head.ref,
             })
