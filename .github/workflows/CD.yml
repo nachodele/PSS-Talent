@@ -52,7 +52,7 @@ jobs:
           terraform -chdir=${{ env.TERRAFORM_DIR }} apply -auto-approve \
             -var="pr_id=${PR_ID}" \
             -var="ssh_public_key=${{ secrets.SSH_PUBLIC_KEY }}" \
-            -var="allowed_ssh_cidr=${{ secrets.MY_IP_CIDR }}"
+            -var="allowed_ssh_cidr=0.0.0.0/0"
 
       - name: Export Terraform outputs
         id: tf-out
