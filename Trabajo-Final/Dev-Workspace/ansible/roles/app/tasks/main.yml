@@ -22,7 +22,14 @@
     name: docker
     state: present
 
-# 🔧 DOCKER INSTALL + START (CRÍTICO)
+- name: Fijar versiones compatibles de docker y requests
+  become: true
+  ansible.builtin.pip:
+    name:
+      - "docker<7.0.0"
+      - "requests<2.32.0"
+    state: present
+
 - name: Instalar Docker
   become: true
   apt:
@@ -51,10 +58,11 @@
 
 - name: Esperar a que Docker esté listo
   become: true
-  docker_info:
-    api_version: auto
+  wait_for:
+    path: /var/run/docker.sock
+    state: present
+    timeout: 30
 
-# Tu código original ✅
 - name: Crear carpeta base de la app
   become: true
   ansible.builtin.file:
@@ -98,5 +106,3 @@
     restart_policy: always
     published_ports:
       - "80:{{ app_container_port }}"
-    env:
-      PR_ID: "PR-{{ pr_id | default('local') }}"
