@@ -27,7 +27,7 @@ jobs:
       TERRAFORM_DIR: ./Trabajo-Final/Dev-Workspace/terraform
 
     steps:
-      - name: Checkout repo
+      - name: Checkout repoo
         uses: actions/checkout@v4
 
       - name: Extraer PR_ID (si hay PR) o usar 0
