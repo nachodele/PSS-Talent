@@ -89,25 +89,15 @@ jobs:
             main.yml \
             -vvv
 
-      - name: Comment PR with ephemeral environment URL
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Print ephemeral environment URLs
         run: |
-          set -e
-
-          # Recuperar número de PR desde el workflow que lanzó el CI
-          PR_NUMBER="${{ github.event.workflow_run.pull_requests[0].number }}"
           IP="${{ needs.terraform.outputs.ip }}"
-          URL="http://${{ needs.terraform.outputs.ip }}/health"
-
-          echo "Comentando en PR #$PR_NUMBER con URL $URL"
-
-          curl -s -X POST \
-            -H "Authorization: Bearer $GH_TOKEN" \
-            -H "Accept: application/vnd.github+json" \
-            "https://api.github.com/repos/${{ github.repository }}/issues/$PR_NUMBER/comments" \
-            -d "$(jq -n --arg url "$URL" --arg ip "$IP" \
-              '{ body: "✅ Entorno efímero desplegado.\n\n🌐 **Health**: \($url)\n🌐 **Version**: http://\($ip)/version\n\nCualquier revisor puede acceder con un navegador, sin SSH." }')"
+          echo "========================================"
+          echo " Entorno efímero desplegado:"
+          echo ""
+          echo "  Health : http://${IP}/health"
+          echo "  Version: http://${IP}/version"
+          echo "========================================"
 
       - name: Clean up private key
         if: always()
