@@ -1,0 +1,70 @@
+name: n8n - Analizar PR
+
+on:
+  workflow_run:
+    workflows: ["CD - Entorno efímero"]
+    types: [completed]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  n8n:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Get PR details
+        id: pr
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PR_NUMBER=${{ github.event.workflow_run.pull_requests[0].number }}
+          REPO=${{ github.repository }}
+
+          curl -s -H "Authorization: Bearer $GH_TOKEN" \
+               -H "Accept: application/vnd.github+json" \
+               "https://api.github.com/repos/$REPO/pulls/$PR_NUMBER" > pr.json
+
+          TITLE=$(jq -r '.title' pr.json)
+          BODY=$(jq -r '.body' pr.json)
+
+          CLEAN_TITLE=$(echo "$TITLE" | tr '\n' ' ' | sed 's/"/\\"/g')
+          CLEAN_BODY=$(echo "$BODY" | tr '\n' ' ' | sed 's/"/\\"/g')
+
+          echo "pr_number=$PR_NUMBER" >> $GITHUB_OUTPUT
+          echo "pr_title=$CLEAN_TITLE" >> $GITHUB_OUTPUT
+          echo "pr_body=$CLEAN_BODY" >> $GITHUB_OUTPUT
+
+      - name: Call n8n PR risk flow
+        id: n8n
+        run: |
+          RESPONSE=$(curl -s -X POST "https://n8n8.alpinia.digital/webhook-test/bb734fe9-d0e1-4e8c-ad1f-452ca8b36427" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"pr_number\": \"${{ steps.pr.outputs.pr_number }}\",
+              \"pr_title\": \"${{ steps.pr.outputs.pr_title }}\",
+              \"pr_body\": \"${{ steps.pr.outputs.pr_body }}\",
+              \"repo\": \"${{ github.repository }}\",
+              \"sha\": \"${{ github.event.workflow_run.head_sha }}\"
+            }")
+
+          echo "n8n_response=$RESPONSE" >> $GITHUB_OUTPUT
+
+      # Opcional: comentar en el PR con la decisión de riesgo devuelta por n8n
+      - name: Comment PR with risk
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PR_NUMBER=${{ steps.pr.outputs.pr_number }}
+          RISK=$(echo '${{ steps.n8n.outputs.n8n_response }}' | jq -r '.risk_level // "unknown"')
+          MSG=$(echo '${{ steps.n8n.outputs.n8n_response }}' | jq -r '.message // "Análisis completado por n8n."')
+
+          curl -s -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/${{ github.repository }}/issues/$PR_NUMBER/comments \
+            -d "{
+              \"body\": \"n8n ha clasificado este PR como: **$RISK**.\\n\\n$MSG\"
+            }"
