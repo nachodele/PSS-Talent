@@ -18,7 +18,6 @@ env:
 
 jobs:
   terraform:
-   # if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     env:
       TERRAFORM_DIR: ./Trabajo-Final/Dev-Workspace/terraform
@@ -60,7 +59,6 @@ jobs:
 
   ansible:
     needs: terraform
-    #if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     env:
       ANSIBLE_DIR: ./Trabajo-Final/Dev-Workspace/ansible
@@ -72,62 +70,59 @@ jobs:
       - name: Install Ansible & AWS libs
         run: |
           sudo apt-get update
-          sudo apt-get install -y python3-pip
-          pip3 install --upgrade ansible boto3 botocore ansible-lint
+          sudo apt-get install -y python3-pip sshpass
+          pip3 install --upgrade ansible[all] boto3 botocore ansible-lint
 
       - name: Save private key
         run: |
           mkdir -p ~/.ssh
-          echo "${{ secrets.EC2_SSH_PRIVATE_KEY }}" > ~/.ssh/nachodele_ssh_key
-          chmod 600 ~/.ssh/nachodele_ssh_key
+          echo "${{ secrets.EC2_SSH_PRIVATE_KEY }}" > ~/.ssh/ssh_key_nachodele.pem
+          chmod 400 ~/.ssh/ssh_key_nachodele.pem  # ✅ Permisos correctos
 
       - name: Lint Ansible playbooks
         working-directory: ${{ env.ANSIBLE_DIR }}
         run: ansible-lint .
 
-      - name: Generar inventory con IP de Terraform
+      - name: Generar inventory con IP de Terraform + PYTHON FIX
         working-directory: ${{ env.ANSIBLE_DIR }}
         run: |
           cat > inventory <<EOF
           [pr_env]
-          pr_vm ansible_host=${{ needs.terraform.outputs.ip }} ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/nachodele_ssh_key
+          pr_vm ansible_host=${{ needs.terraform.outputs.ip }} ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/ssh_key_nachodele.pem ansible_python_interpreter=/usr/bin/python3
           EOF
+          cat inventory  # Debug
 
       - name: Run Ansible playbook
         env:
           ANSIBLE_HOST_KEY_CHECKING: "False"
         working-directory: ${{ env.ANSIBLE_DIR }}
-        run: ansible-playbook -i inventory -u ubuntu --private-key ~/.ssh/nachodele_ssh_key main.yml
+        run: |
+          ansible-playbook -i inventory \
+            --private-key ~/.ssh/ssh_key_nachodele.pem \
+            --user ubuntu \
+            -e "ansible_python_interpreter=/usr/bin/python3" \
+            main.yml \
+            -vvv  # Debug verbose
 
       - name: Clean up private key
         if: always()
-        run: rm -f ~/.ssh/nachodele_ssh_key
+        run: rm -rf ~/.ssh/
 
   notify-n8n:
     needs: [terraform, ansible]
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    if: ${{ always() }}
     runs-on: ubuntu-latest
 
     steps:
-      - name: Find PR (por rama del workflow origen)
-        id: pr-info
-        run: |
-          PR_NUMBER=$(gh pr list --state open --json headRefName,number --jq \
-            ".[] | select(.headRefName == \"${{ github.event.workflow_run.head_branch }}\") | .number" | head -n 1)
-          PR_NUMBER=${PR_NUMBER:-0}
-          echo "pr_number=$PR_NUMBER" >> $GITHUB_OUTPUT
-          echo "PR detectado: $PR_NUMBER"
-
       - name: Notify n8n
-        if: steps.pr-info.outputs.pr_number != '0'
         run: |
           curl -X POST "https://n8n8.alpinia.digital/webhook-test/bb734fe9-d0e1-4e8c-ad1f-452ca8b36427" \
             -H "Content-Type: application/json" \
             -d '{
-              "pr_number": "${{ steps.pr-info.outputs.pr_number }}",
+              "pr_number": "${{ github.event.pull_request.number || 0 }}",
               "repo": "${{ github.repository }}",
-              "sha": "${{ github.event.workflow_run.head_sha }}",
-              "status": "deployed",
+              "sha": "${{ github.sha }}",
+              "status": "${{ needs.ansible.result }}",
               "ip": "${{ needs.terraform.outputs.ip }}",
               "url": "${{ needs.terraform.outputs.url }}"
             }'
