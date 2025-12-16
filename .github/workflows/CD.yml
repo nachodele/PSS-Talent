@@ -41,7 +41,6 @@ jobs:
         run: |
           terraform -chdir=${{ env.TERRAFORM_DIR }} apply -auto-approve \
             -var="pr_id=0" \
-            -var="ssh_public_key=${{ env.SSH_PUBLIC_KEY }}" \
             -var="allowed_ssh_cidr=0.0.0.0/0"
 
       - name: Export Terraform outputs
@@ -68,7 +67,7 @@ jobs:
           sudo apt-get install -y python3-pip
           pip3 install --upgrade ansible boto3 botocore ansible-lint
 
-      - name: Save private key (MISMO PATRÓN QUE EN CI ANTIGUO)
+      - name: Save private key (mismo patrón que el CI antiguo)
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.EC2_SSH_PRIVATE_KEY }}" > ~/.ssh/nachodele_ssh_key
@@ -85,7 +84,6 @@ jobs:
           [pr_env]
           pr_vm ansible_host=${{ needs.terraform-apply.outputs.ip }} ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/nachodele_ssh_key
           EOF
-          cat inventory
 
       - name: Ejecutar Ansible (Docker + app)
         working-directory: ${{ env.ANSIBLE_DIR }}
