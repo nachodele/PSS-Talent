@@ -7,7 +7,7 @@ variable "aws_region" {
 variable "pr_id" {
   description = "GitHub PR number"
   type        = string
-  default     = "0"    # ← ya no es obligatorio
+  default     = "0" # ← ya no es obligatorio
 }
 
 variable "allowed_ssh_cidr" {
