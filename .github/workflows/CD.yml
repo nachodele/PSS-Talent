@@ -92,22 +92,3 @@ jobs:
       - name: Clean up private key
         if: always()
         run: rm -rf ~/.ssh/
-
-  notify-n8n:
-    needs: [terraform, ansible]
-    runs-on: ubuntu-latest
-    if: ${{ always() }}
-
-    steps:
-      - name: Notify n8n
-        run: |
-          curl -X POST "https://n8n8.alpinia.digital/webhook-test/bb734fe9-d0e1-4e8c-ad1f-452ca8b36427" \
-            -H "Content-Type: application/json" \
-            -d '{
-              "pr_number": "${{ github.event.workflow_run.pull_requests[0].number || 0 }}",
-              "repo": "${{ github.repository }}",
-              "sha": "${{ github.event.workflow_run.head_sha }}",
-              "status": "${{ needs.ansible.result }}",
-              "ip": "${{ needs.terraform.outputs.ip }}",
-              "url": "${{ needs.terraform.outputs.url }}"
-            }'
