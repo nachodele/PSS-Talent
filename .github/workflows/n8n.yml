@@ -5,8 +5,9 @@ on:
     types: [opened, edited, synchronize, reopened]
 
 permissions:
-  contents: read
+  contents: write
   pull-requests: write
+  actions: write
 
 jobs:
   n8n:
@@ -61,7 +62,7 @@ jobs:
           echo "EOF" >> "$GITHUB_OUTPUT"
 
       - name: Call n8n PR risk flow
-        id: n8n
+        id: n8n_call
         run: |
           set -e
           jq -n \
@@ -87,24 +88,34 @@ jobs:
             -H "Content-Type: application/json" \
             -d @payload.json)
 
-          echo "Respuesta de n8n:"
+          echo "Respuesta de n8n RAW:"
           echo "$RESPONSE"
 
+          # Respuesta es un array: [ { risk_level, reason } ]
+          # Extraemos el primer elemento.
+          PARSED=$(echo "$RESPONSE" | jq '.[0]')
+          echo "Respuesta de n8n parseada (primer item):"
+          echo "$PARSED"
+
           echo "n8n_response<<EOF" >> "$GITHUB_OUTPUT"
-          echo "$RESPONSE" >> "$GITHUB_OUTPUT"
+          echo "$PARSED" >> "$GITHUB_OUTPUT"
           echo "EOF" >> "$GITHUB_OUTPUT"
 
-      - name: Comment PR with risk and enforce result
+      - name: Comment PR with risk
+        id: comment
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -e
 
           PR_NUMBER="${{ steps.pr.outputs.pr_number }}"
-          RESPONSE='${{ steps.n8n.outputs.n8n_response }}'
+          RESPONSE='${{ steps.n8n_call.outputs.n8n_response }}'
 
+          # Ahora RESPONSE es { "risk_level": "...", "reason": "..." }
           RISK=$(echo "$RESPONSE" | jq -r '.risk_level // "unknown"')
-          MSG=$(echo "$RESPONSE" | jq -r '.message // "Análisis completado por n8n."')
+          MSG=$(echo "$RESPONSE" | jq -r '.reason // .message // "Análisis completado por n8n."')
+
+          echo "risk=$RISK" >> "$GITHUB_OUTPUT"
 
           curl -s -X POST \
             -H "Authorization: Bearer $GH_TOKEN" \
@@ -113,9 +124,32 @@ jobs:
             -d "$(jq -n --arg risk "$RISK" --arg msg "$MSG" \
               '{ body: ("n8n ha clasificado este PR como: **" + $risk + "**.\n\n" + $msg) }')"
 
-          if [ "$RISK" = "critico" ] || [ "$RISK" = "critical" ]; then
-            echo "PR marcado como riesgo crítico; fallando job para forzar revisión humana."
-            exit 1
-          fi
+      - name: Enable auto-merge for low risk
+        if: |
+          steps.comment.outputs.risk == 'bajo' ||
+          steps.comment.outputs.risk == 'low'
+        uses: peter-evans/enable-pull-request-automerge@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          pull-request-number: ${{ steps.pr.outputs.pr_number }}
+          merge-method: squash
 
-          echo "PR de riesgo no crítico; check n8n OK."
+      - name: Trigger CI workflow for critical risk
+        if: |
+          steps.comment.outputs.risk == 'critico' ||
+          steps.comment.outputs.risk == 'critical'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'ci-infra-config.yml', // nombre del fichero del CI
+              ref: context.payload.pull_request.head.ref,
+              inputs: {
+                pr_number: String(${{
+                  steps.pr.outputs.pr_number
+                }})
+              }
+            })
