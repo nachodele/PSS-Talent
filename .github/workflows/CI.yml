@@ -2,7 +2,7 @@ name: CI - Infra y Config
 
 on:
   pull_request:
-    types: [edited, synchronize, reopened]
+    types: [opened, edited, synchronize, reopened]
 
 permissions:
   contents: read
