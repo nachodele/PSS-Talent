@@ -1,3 +1,8 @@
+# --------- Key pair EXISTENTE ---------
+data "aws_key_pair" "ssh_key_nachodele" {
+  key_name = "ssh_key_nachodele"
+}
+
 data "aws_ami" "ubuntu" {
   most_recent = true
   owners      = ["099720109477"]
@@ -19,8 +24,7 @@ resource "aws_instance" "pr_instance" {
   subnet_id              = aws_subnet.pr_subnet.id
   vpc_security_group_ids = [aws_security_group.pr_sg.id]
 
-  # AQUÍ la clave: usar el key pair que ya existe en AWS
-  key_name = "ssh_key_nachodele"
+  key_name = data.aws_key_pair.ssh_key_nachodele.key_name
 
   root_block_device {
     volume_size = 8
