@@ -91,14 +91,9 @@ jobs:
           echo "Respuesta de n8n RAW:"
           echo "$RESPONSE"
 
-          # Respuesta es un array: [ { risk_level, reason } ]
-          # Extraemos el primer elemento.
-          PARSED=$(echo "$RESPONSE" | jq '.[0]')
-          echo "Respuesta de n8n parseada (primer item):"
-          echo "$PARSED"
-
+          # n8n devuelve un objeto plano: {"risk_level":"...","reason":"..."}
           echo "n8n_response<<EOF" >> "$GITHUB_OUTPUT"
-          echo "$PARSED" >> "$GITHUB_OUTPUT"
+          echo "$RESPONSE" >> "$GITHUB_OUTPUT"
           echo "EOF" >> "$GITHUB_OUTPUT"
 
       - name: Comment PR with risk
@@ -111,7 +106,6 @@ jobs:
           PR_NUMBER="${{ steps.pr.outputs.pr_number }}"
           RESPONSE='${{ steps.n8n_call.outputs.n8n_response }}'
 
-          # Ahora RESPONSE es { "risk_level": "...", "reason": "..." }
           RISK=$(echo "$RESPONSE" | jq -r '.risk_level // "unknown"')
           MSG=$(echo "$RESPONSE" | jq -r '.reason // .message // "Análisis completado por n8n."')
 
@@ -147,9 +141,4 @@ jobs:
               repo: context.repo.repo,
               workflow_id: 'ci-infra-config.yml', // nombre del fichero del CI
               ref: context.payload.pull_request.head.ref,
-              inputs: {
-                pr_number: String(${{
-                  steps.pr.outputs.pr_number
-                }})
-              }
             })
