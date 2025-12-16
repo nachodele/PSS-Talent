@@ -22,7 +22,7 @@ jobs:
 
       - name: Find PR
         id: pr-finder
-        uses: jwalton/gh-find-current-pr@v5
+        uses: jwalton/gh-find-current-pr@v2
 
       - name: Debug PR - SIMPLE
         run: |
@@ -97,7 +97,7 @@ jobs:
     steps:
       - name: Find PR
         id: pr
-        uses: jwalton/gh-find-current-pr@v5
+        uses: jwalton/gh-find-current-pr@v2
 
       - name: Comment PR
         if: steps.pr.outputs.pr != '0'
