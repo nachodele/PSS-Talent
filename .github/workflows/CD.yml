@@ -14,17 +14,16 @@ env:
   AWS_REGION: ${{ secrets.AWS_REGION }}
   AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
   AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-  SSH_PUBLIC_KEY: "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQCiaZL/31r1TvVi/4OXevkMYraxq457OUC+uz0KaNf4BHFqV6ZmsLrSQCK8IfNHzvJcE9QhMSYTsi0bQ/bwAemF6HSH5ClwqmLB6GY0WMZ2teC8o3/G9u1AweY0wzVlCYPQH8i9It/WGOk3gCEFPuNp6gZg5831Pl3MFFRxAmuNx4iD4n1WQ+MFltIbvuQ4lA2/e4v8mmdt65q70iWVsFzzxV58W5Xv0sqrNf5MS1/ciO2m/WCDE8eTzVd6iBV5z6FGvdAKCMyxP3wPs2moV/2E6+jKQJ9GsCJ0qPA/UgI5lx+El98g8hQkLf9fK3TqzzPgos/KFvStAA5Nq6hl/aR6kX20TsfV7zUl0MshqtFMa6VYCEJcPHWtBwskLl5QED+zBEnMJxkQJcnnk1pXuvurTS1RGKa+O9xanw+te1jDVlEHzSfCvc1Uke/NwfRnI0pd1adYn9LFyxsH/N9kSRYdm7p7T9oRGuuW3jK/92yYRK3vauLR2lSfzAn5+HEjTwgc67K1mxrz+AS9ecHUMQ1geE0SRjqUh0C/vsKn9kmjlLoDCUg5Syef+EHIZ9HtRGnYxxxv2imNCa32OPi5jGoSxMnCblZ9rmfwObzGR36UWFUbGnf4cqPezYg+3o13x+zFDc8eDvTctysrkuic42qCLi+SsC1lLgbgUM//Eq0BZw== vagrant@control"
 
 jobs:
   terraform-apply:
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
+    env:
+      TERRAFORM_DIR: ./Trabajo-Final/Dev-Workspace/terraform
     outputs:
       ip: ${{ steps.tf-out.outputs.ip }}
       url: ${{ steps.tf-out.outputs.url }}
-    env:
-      TERRAFORM_DIR: ./Trabajo-Final/Dev-Workspace/terraform
 
     steps:
       - name: Checkout repo
@@ -42,7 +41,7 @@ jobs:
         run: |
           terraform -chdir=${{ env.TERRAFORM_DIR }} apply -auto-approve \
             -var="pr_id=0" \
-            -var="ssh_public_key=$SSH_PUBLIC_KEY" \
+            -var="ssh_public_key=${{ env.SSH_PUBLIC_KEY }}" \
             -var="allowed_ssh_cidr=0.0.0.0/0"
 
       - name: Export Terraform outputs
@@ -58,63 +57,69 @@ jobs:
     runs-on: ubuntu-latest
     env:
       ANSIBLE_DIR: ./Trabajo-Final/Dev-Workspace/ansible
-      SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}  # ← Solo private key como secret
 
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Install Ansible + SSH
+      - name: Install Ansible & AWS libs
         run: |
           sudo apt-get update
-          sudo apt-get install -y python3-pip jq openssh-client
-          pip3 install --upgrade ansible
+          sudo apt-get install -y python3-pip
+          pip3 install --upgrade ansible boto3 botocore ansible-lint
 
-      - name: Setup SSH key
+      - name: Save private key (MISMO PATRÓN QUE EN CI ANTIGUO)
         run: |
           mkdir -p ~/.ssh
-          echo "$SSH_PRIVATE_KEY" | tr -d '\r' > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          ssh-keygen -y -f ~/.ssh/id_rsa > ~/.ssh/id_rsa.pub
+          echo "${{ secrets.EC2_SSH_PRIVATE_KEY }}" > ~/.ssh/nachodele_ssh_key
+          chmod 600 ~/.ssh/nachodele_ssh_key
 
-      - name: Test SSH connection
-        run: |
-          ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa ubuntu@${{ needs.terraform-apply.outputs.ip }} "echo 'SSH OK'"
+      - name: Lint Ansible playbooks (opcional)
+        working-directory: ${{ env.ANSIBLE_DIR }}
+        run: ansible-lint .
 
-      - name: Generar inventory
+      - name: Generar inventory con IP de Terraform
         working-directory: ${{ env.ANSIBLE_DIR }}
         run: |
           cat > inventory <<EOF
           [pr_env]
-          pr_vm ansible_host=${{ needs.terraform-apply.outputs.ip }} ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/id_rsa
+          pr_vm ansible_host=${{ needs.terraform-apply.outputs.ip }} ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/nachodele_ssh_key
           EOF
+          cat inventory
 
-      - name: Ejecutar Ansible
+      - name: Ejecutar Ansible (Docker + app)
         working-directory: ${{ env.ANSIBLE_DIR }}
+        env:
+          ANSIBLE_HOST_KEY_CHECKING: "False"
         run: |
           ansible-playbook main.yml \
-            --private-key ~/.ssh/id_rsa \
-            --ssh-extra-args="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+            -i inventory \
+            -u ubuntu \
+            --private-key ~/.ssh/nachodele_ssh_key
 
-      - name: Clean up
+      - name: Clean up private key
         if: always()
-        run: rm -rf ~/.ssh/*
+        run: rm -f ~/.ssh/nachodele_ssh_key
 
   notify-n8n:
     needs: [terraform-apply, ansible-deploy]
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
+
     steps:
       - name: Find PR with GH CLI
         id: pr-info
         run: |
-          PR_NUMBER=$(gh pr list --head ${{ github.event.workflow_run.head_sha }} --json number --jq '.[0].number // 0')
+          PR_NUMBER=$(gh pr list --state open --json headRefName,number --jq \
+            ".[] | select(.headRefName == \"${{ github.event.workflow_run.head_branch }}\") | .number" | head -n 1)
+          PR_NUMBER=${PR_NUMBER:-0}
           echo "pr_number=$PR_NUMBER" >> $GITHUB_OUTPUT
+          echo "PR detectado: $PR_NUMBER"
 
       - name: Notify n8n
         if: steps.pr-info.outputs.pr_number != '0'
         run: |
-          curl -X POST https://n8n8.alpinia.digital/webhook-test/bb734fe9-d0e1-4e8c-ad1f-452ca8b36427 \
+          curl -X POST "https://n8n8.alpinia.digital/webhook-test/bb734fe9-d0e1-4e8c-ad1f-452ca8b36427" \
             -H "Content-Type: application/json" \
             -d '{
               "pr_number": "${{ steps.pr-info.outputs.pr_number }}",
