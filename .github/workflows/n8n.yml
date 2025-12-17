@@ -84,14 +84,18 @@ jobs:
           echo "Payload a n8n:"
           cat payload.json
 
-          RESPONSE=$(curl -s -X POST "https://n8n8.alpinia.digital/webhook-test/bb734fe9-d0e1-4e8c-ad1f-452ca8b36427" \
+          RAW_RESPONSE=$(curl -s -X POST "https://n8n8.alpinia.digital/webhook-test/bb734fe9-d0e1-4e8c-ad1f-452ca8b36427" \
             -H "Content-Type: application/json" \
             -d @payload.json)
 
+          # PARSEAR ARRAY → OBJETO (extraer primer elemento)
+          RESPONSE=$(echo "$RAW_RESPONSE" | jq '.[0]')
+
           echo "Respuesta de n8n RAW:"
+          echo "$RAW_RESPONSE"
+          echo "Respuesta parseada:"
           echo "$RESPONSE"
 
-          # n8n devuelve un objeto plano: {"risk_level":"...","reason":"..."}
           echo "n8n_response<<EOF" >> "$GITHUB_OUTPUT"
           echo "$RESPONSE" >> "$GITHUB_OUTPUT"
           echo "EOF" >> "$GITHUB_OUTPUT"
