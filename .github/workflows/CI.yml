@@ -5,6 +5,7 @@ on:
 
 permissions:
   contents: read
+  actions: write
 
 env:
   AWS_REGION: ${{ secrets.AWS_REGION }}
