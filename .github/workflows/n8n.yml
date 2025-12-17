@@ -34,16 +34,12 @@ jobs:
           BODY=$(jq -r '.body // ""' pr.json)
 
           echo "pr_number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
-          {
-            echo "pr_title<<EOF"
-            echo "$TITLE"
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
-          {
-            echo "pr_body<<EOF"
-            echo "$BODY"
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
+          echo "pr_title<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$TITLE" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+          echo "pr_body<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$BODY" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
 
       - name: Get PR diff (code changes)
         id: diff
@@ -61,11 +57,9 @@ jobs:
 
           head -c 50000 pr.diff > pr_trimmed.diff
 
-          {
-            echo "pr_diff<<EOF"
-            cat pr_trimmed.diff
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
+          echo "pr_diff<<EOF" >> "$GITHUB_OUTPUT"
+          cat pr_trimmed.diff >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
 
       - name: Call n8n PR risk flow
         id: n8n_call
@@ -97,15 +91,19 @@ jobs:
           echo "Respuesta de n8n:"
           echo "$RESPONSE"
 
-          # Soporta respuesta como objeto o como array
-          RISK=$(echo "$RESPONSE" | jq -r '.risk_level? // (.[0].risk_level? // "unknown")' | tr -d '[:space:]')
+          # n8n responde un OBJETO como el que muestras:
+          # {"risk_level":"=critico","message":"=..."}
+          RAW_RISK=$(echo "$RESPONSE" | jq -r '.risk_level // "unknown"')
+          # Normalizar: quitar '=' inicial si lo hay y espacios en blanco
+          RISK=${RAW_RISK#=}
+          RISK=$(echo "$RISK" | tr -d '[:space:]')
+
+          echo "RISK normalizado: $RISK"
           echo "risk=$RISK" >> "$GITHUB_OUTPUT"
 
-          {
-            echo "n8n_response<<EOF"
-            echo "$RESPONSE"
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
+          echo "n8n_response<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$RESPONSE" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
 
       - name: Debug RISK
         run: |
@@ -123,7 +121,6 @@ jobs:
           RESPONSE='${{ steps.n8n_call.outputs.n8n_response }}'
           RISK="${{ steps.n8n_call.outputs.risk }}"
 
-          # Ojo: tu respuesta real es un array; aquí podrías adaptarlo igual que arriba si lo necesitas
           MSG=$(echo "$RESPONSE" | jq -r '.message // .reason // "Análisis completado por n8n."')
 
           curl -s -X POST \
