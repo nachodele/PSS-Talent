@@ -84,24 +84,22 @@ jobs:
           echo "Payload a n8n:"
           cat payload.json
 
-          RAW_RESPONSE=$(curl -s -X POST "https://n8n8.alpinia.digital/webhook-test/bb734fe9-d0e1-4e8c-ad1f-452ca8b36427" \
+          RESPONSE=$(curl -s -X POST "https://n8n8.alpinia.digital/webhook-test/bb734fe9-d0e1-4e8c-ad1f-452ca8b36427" \
             -H "Content-Type: application/json" \
             -d @payload.json)
 
-          # PARSEAR ARRAY → OBJETO (extraer primer elemento)
-          RESPONSE=$(echo "$RAW_RESPONSE" | jq '.[0]')
-
-          echo "Respuesta de n8n RAW:"
-          echo "$RAW_RESPONSE"
-          echo "Respuesta parseada:"
+          echo "Respuesta de n8n:"
           echo "$RESPONSE"
 
+          # EXTRAER RISK DIRECTAMENTE
+          RISK=$(echo "$RESPONSE" | jq -r '.risk_level // "unknown"')
+          echo "risk=$RISK" >> "$GITHUB_OUTPUT"
+          
           echo "n8n_response<<EOF" >> "$GITHUB_OUTPUT"
           echo "$RESPONSE" >> "$GITHUB_OUTPUT"
           echo "EOF" >> "$GITHUB_OUTPUT"
 
       - name: Comment PR with risk
-        id: comment
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -109,11 +107,9 @@ jobs:
 
           PR_NUMBER="${{ steps.pr.outputs.pr_number }}"
           RESPONSE='${{ steps.n8n_call.outputs.n8n_response }}'
+          RISK="${{ steps.n8n_call.outputs.risk }}"
 
-          RISK=$(echo "$RESPONSE" | jq -r '.risk_level // "unknown"')
-          MSG=$(echo "$RESPONSE" | jq -r '.reason // .message // "Análisis completado por n8n."')
-
-          echo "risk=$RISK" >> "$GITHUB_OUTPUT"
+          MSG=$(echo "$RESPONSE" | jq -r '.message // .reason // "Análisis completado por n8n."')
 
           curl -s -X POST \
             -H "Authorization: Bearer $GH_TOKEN" \
@@ -124,8 +120,8 @@ jobs:
 
       - name: Enable auto-merge for low risk
         if: |
-          steps.comment.outputs.risk == 'bajo' ||
-          steps.comment.outputs.risk == 'low'
+          steps.n8n_call.outputs.risk == 'bajo' ||
+          steps.n8n_call.outputs.risk == 'low'
         uses: peter-evans/enable-pull-request-automerge@v3
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -134,8 +130,8 @@ jobs:
 
       - name: Trigger CI workflow for critical risk
         if: |
-          steps.comment.outputs.risk == 'critico' ||
-          steps.comment.outputs.risk == 'critical'
+          steps.n8n_call.outputs.risk == 'critico' ||
+          steps.n8n_call.outputs.risk == 'critical'
         uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
