@@ -68,14 +68,11 @@ jobs:
           mkdir -p ~/.ssh
           echo "${{ secrets.EC2_SSH_PRIVATE_KEY }}" > ~/.ssh/ssh_key_nachodele.pem
           chmod 400 ~/.ssh/ssh_key_nachodele.pem
-
       - name: Generar inventory con IP de Terraform
         working-directory: ${{ env.ANSIBLE_DIR }}
         run: |
-          cat > inventory <<EOF
-          [pr_env]
-          pr_vm ansible_host=${{ needs.terraform.outputs.ip }} ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/ssh_key_nachodele.pem ansible_python_interpreter=/usr/bin/python3
-          EOF
+          echo "[pr_env]" > inventory
+          echo "pr_vm ansible_host=${{ needs.terraform.outputs.ip }} ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/ssh_key_nachodele.pem ansible_python_interpreter=/usr/bin/python3" >> inventory
 
       - name: Run Ansible playbook
         env:
@@ -99,6 +96,21 @@ jobs:
           echo "  Health : http://${IP}/health"
           echo "  Version: http://${IP}/version"
           echo "========================================"
+
+      - name: Comment URLs on PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const ip = '${{ needs.terraform.outputs.ip }}';
+            const body = 'Entorno efímero desplegado\n\n- Health: http://' + ip + '/health\n- Version: http://' + ip + '/version';
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body
+            });
 
       - name: Clean up private key
         if: always()
