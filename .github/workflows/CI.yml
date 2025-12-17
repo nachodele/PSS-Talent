@@ -63,3 +63,15 @@ jobs:
       - name: Lint Ansible playbooks
         working-directory: ${{ env.ANSIBLE_DIR }}
         run: ansible-lint .
+      
+      - name: Trigger CD workflow
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'CD.yml',
+              ref: context.ref,
+            });
