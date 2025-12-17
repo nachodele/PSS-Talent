@@ -91,8 +91,10 @@ jobs:
           echo "Respuesta de n8n:"
           echo "$RESPONSE"
 
-          # Normalizar risk_level: {"risk_level":"=critico", ...}
+          # n8n responde un OBJETO como el que muestras:
+          # {"risk_level":"=critico","message":"=..."}
           RAW_RISK=$(echo "$RESPONSE" | jq -r '.risk_level // "unknown"')
+          # Normalizar: quitar '=' inicial si lo hay y espacios en blanco
           RISK=${RAW_RISK#=}
           RISK=$(echo "$RISK" | tr -d '[:space:]')
 
@@ -100,7 +102,7 @@ jobs:
           echo "risk=$RISK" >> "$GITHUB_OUTPUT"
 
           echo "n8n_response<<EOF" >> "$GITHUB_OUTPUT"
-          echo "$RESPONSE"
+          echo "$RESPONSE" >> "$GITHUB_OUTPUT"
           echo "EOF" >> "$GITHUB_OUTPUT"
 
       - name: Debug RISK
@@ -119,9 +121,7 @@ jobs:
           RESPONSE='${{ steps.n8n_call.outputs.n8n_response }}'
           RISK="${{ steps.n8n_call.outputs.risk }}"
 
-          # Normalizar el message igual que el risk (quita '=' inicial)
-          RAW_MSG=$(echo "$RESPONSE" | jq -r '.message // .reason // "Análisis completado por n8n."')
-          MSG=${RAW_MSG#=}
+          MSG=$(echo "$RESPONSE" | jq -r '.message // .reason // "Análisis completado por n8n."')
 
           curl -s -X POST \
             -H "Authorization: Bearer $GH_TOKEN" \
@@ -130,38 +130,10 @@ jobs:
             -d "$(jq -n --arg risk "$RISK" --arg msg "$MSG" \
               '{ body: ("n8n ha clasificado este PR como: **" + $risk + "**.\n\n" + $msg) }')"
 
-      # Mover PR de riesgo bajo a la rama low-risk
-      - name: Move low-risk PR to low-risk branch
-        if: |
-          steps.n8n_call.outputs.risk == 'bajo' ||
-          steps.n8n_call.outputs.risk == 'low'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -e
-          PR_NUMBER="${{ steps.pr.outputs.pr_number }}"
-          OWNER_REPO="${{ github.repository }}"
-          OWNER="${OWNER_REPO%%/*}"
-          REPO="${OWNER_REPO#*/}"
-
-          echo "Cambiando base del PR #$PR_NUMBER a 'low-risk'..."
-          curl -s -X PATCH \
-            -H "Authorization: Bearer $GH_TOKEN" \
-            -H "Accept: application/vnd.github+json" \
-            "https://api.github.com/repos/$OWNER/$REPO/pulls/$PR_NUMBER" \
-            -d '{"base":"low-risk"}'
-
-      - name: Wait for PR to stabilize
-        if: |
-          steps.n8n_call.outputs.risk == 'bajo' ||
-          steps.n8n_call.outputs.risk == 'low'
-        run: sleep 10
-
       - name: Enable auto-merge for low risk
         if: |
           steps.n8n_call.outputs.risk == 'bajo' ||
           steps.n8n_call.outputs.risk == 'low'
-        continue-on-error: true
         uses: peter-evans/enable-pull-request-automerge@v3
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
