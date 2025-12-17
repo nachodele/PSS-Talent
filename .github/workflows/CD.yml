@@ -14,7 +14,6 @@ env:
 
 jobs:
   terraform:
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     env:
       TERRAFORM_DIR: ./Trabajo-Final/Dev-Workspace/terraform
@@ -66,6 +65,7 @@ jobs:
           mkdir -p ~/.ssh
           echo "${{ secrets.EC2_SSH_PRIVATE_KEY }}" > ~/.ssh/ssh_key_nachodele.pem
           chmod 400 ~/.ssh/ssh_key_nachodele.pem
+
       - name: Generar inventory con IP de Terraform
         working-directory: ${{ env.ANSIBLE_DIR }}
         run: |
@@ -81,7 +81,7 @@ jobs:
             --private-key ~/.ssh/ssh_key_nachodele.pem \
             --user ubuntu \
             -e "ansible_python_interpreter=/usr/bin/python3" \
-            -e "app_repo_version=${{ github.event.workflow_run.head_sha }}" \
+            -e "app_repo_version=${{ github.sha }}" \
             main.yml \
             -vvv
 
@@ -95,18 +95,37 @@ jobs:
           echo "  Version: http://${IP}/version"
           echo "========================================"
 
+      - name: Find PR for this branch
+        id: find-pr
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const branch = context.ref.replace('refs/heads/', '');
+            const { data: prs } = await github.rest.pulls.list({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+            });
+            const pr = prs.find(pr => pr.head.ref === branch);
+            if (!pr) {
+              core.setFailed(`No open PR found for branch ${branch}`);
+            } else {
+              core.setOutput('number', pr.number.toString());
+            }
+
       - name: Comment URLs on PR
-        if: github.event_name == 'pull_request'
         uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const ip = '${{ needs.terraform.outputs.ip }}';
             const body = 'Entorno efímero desplegado\n\n- Health: http://' + ip + '/health\n- Version: http://' + ip + '/version';
+            const issue_number = Number('${{ steps.find-pr.outputs.number }}');
             await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              issue_number: context.issue.number,
+              issue_number,
               body
             });
 
