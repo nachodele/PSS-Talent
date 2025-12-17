@@ -4,3 +4,7 @@ Herramientas empleadas:
 - Ansible
 - Terraform
 - Github Actions
+  
+Segunda Parte: Gen AI/ Agentic AI
+- ML, DL
+- n8n
