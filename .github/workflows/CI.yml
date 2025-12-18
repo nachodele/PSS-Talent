@@ -82,6 +82,8 @@ jobs:
               ref: context.ref,
               inputs: {
                 risk: '${{ github.event.inputs.risk }}',
+                pr_number: '${{ github.event.inputs.pr_number }}',
+                sha: '${{ github.event.inputs.sha }}',
               },
             });
 
@@ -102,5 +104,8 @@ jobs:
               ref: context.ref,
               inputs: {
                 risk: '${{ github.event.inputs.risk }}',
+                pr_number: '${{ github.event.inputs.pr_number }}',
+                sha: '${{ github.event.inputs.sha }}',
               },
+
             });
