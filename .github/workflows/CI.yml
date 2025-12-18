@@ -18,7 +18,6 @@ on:
 
 permissions:
   contents: read
-  actions: write
 
 env:
   AWS_REGION: ${{ secrets.AWS_REGION }}
@@ -47,18 +46,6 @@ jobs:
       - name: Terraform Validate
         run: terraform -chdir=${{ env.TERRAFORM_DIR }} validate
 
-      - name: Guardar PR number como artefacto
-        if: ${{ github.event_name == 'pull_request' }}
-        run: |
-          echo "${{ github.event.pull_request.number }}" > pr_num.txt
-
-      - name: Upload PR number artifact
-        if: ${{ github.event_name == 'pull_request' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: pr_num
-          path: pr_num.txt
-
   ansible-ci:
     runs-on: ubuntu-latest
     needs: terraform-ci
@@ -77,43 +64,3 @@ jobs:
       - name: Lint Ansible playbooks
         working-directory: ${{ env.ANSIBLE_DIR }}
         run: ansible-lint .
-
-      - name: Trigger CD workflow (critical risk)
-        uses: actions/github-script@v7
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            await github.rest.actions.createWorkflowDispatch({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              workflow_id: 'CD.yml',
-              ref: context.ref,
-              inputs: {
-                risk: '${{ github.event.inputs.risk }}',
-                pr_number: '${{ github.event.inputs.pr_number }}',
-                sha: '${{ github.event.inputs.sha }}',
-              },
-            });
-
-  trigger-cd-low:
-    runs-on: ubuntu-latest
-    # Solo para riesgo bajo
-    if: github.event.inputs.risk == 'bajo' || github.event.inputs.risk == 'low'
-    steps:
-      - name: Trigger CD workflow (low risk)
-        uses: actions/github-script@v7
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            await github.rest.actions.createWorkflowDispatch({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              workflow_id: 'CD.yml',
-              ref: context.ref,
-              inputs: {
-                risk: '${{ github.event.inputs.risk }}',
-                pr_number: '${{ github.event.inputs.pr_number }}',
-                sha: '${{ github.event.inputs.sha }}',
-              },
-
-            });
