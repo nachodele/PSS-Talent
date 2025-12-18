@@ -7,6 +7,14 @@ on:
         description: "Risk level from n8n"
         required: true
         type: string
+      pr_number:
+        description: "Pull Request number"
+        required: true
+        type: string
+      sha:
+        description: "Head SHA of the PR"
+        required: true
+        type: string
 
 permissions:
   contents: read
