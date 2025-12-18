@@ -160,5 +160,7 @@ jobs:
               ref: context.payload.pull_request.head.ref,
               inputs: {
                 risk: '${{ steps.n8n_call.outputs.risk }}',
+                pr_number: '${{ steps.pr.outputs.pr_number }}',
+                sha: '${{ github.event.pull_request.head.sha }}',
               },
-            })
+            });
