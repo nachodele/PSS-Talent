@@ -209,17 +209,17 @@ jobs:
             const summary = '${{ steps.decide.outputs.summary }}';
             const prNumber = parseInt('${{ github.event.inputs.pr_number }}', 10);
             const sha = '${{ github.event.inputs.sha }}';
-
-            // Crear un check run asociado al PR
-            await github.checks.create({
+      
+            await github.rest.checks.create({
               owner: context.repo.owner,
               repo: context.repo.repo,
               name: 'CD - Entorno efímero',
               head_sha: sha,
               status: 'completed',
-              conclusion: conclusion,
+              conclusion,
               output: {
                 title: 'CD - Entorno efímero',
-                summary: summary,
+                summary,
               },
             });
+
