@@ -136,6 +136,16 @@ jobs:
             -d "$(jq -n --arg risk "$RISK" --arg msg "$MSG" \
               '{ body: ("n8n ha clasificado este PR como: **" + $risk + "**.\n\n" + $msg) }')"
 
+      - name: Enable auto-merge for low risk
+        if: |
+          steps.n8n_call.outputs.risk == 'bajo' ||
+          steps.n8n_call.outputs.risk == 'low'
+        uses: peter-evans/enable-pull-request-automerge@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          pull-request-number: ${{ steps.pr.outputs.pr_number }}
+          merge-method: squash
+
       # Disparar siempre el CI, pasando el risk como input
       - name: Trigger CI workflow
         uses: actions/github-script@v7
