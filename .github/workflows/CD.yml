@@ -17,7 +17,7 @@ on:
         type: string
 
 permissions:
-  contents: read
+  contents: read, write
   pull-requests: write
   checks: write   # necesario para usar la API de Checks
 
