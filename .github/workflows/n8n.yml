@@ -136,20 +136,8 @@ jobs:
             -d "$(jq -n --arg risk "$RISK" --arg msg "$MSG" \
               '{ body: ("n8n ha clasificado este PR como: **" + $risk + "**.\n\n" + $msg) }')"
 
-      - name: Enable auto-merge for low risk
-        if: |
-          steps.n8n_call.outputs.risk == 'bajo' ||
-          steps.n8n_call.outputs.risk == 'low'
-        uses: peter-evans/enable-pull-request-automerge@v3
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          pull-request-number: ${{ steps.pr.outputs.pr_number }}
-          merge-method: squash
-
-      - name: Trigger CI workflow for critical risk
-        if: |
-          steps.n8n_call.outputs.risk == 'critico' ||
-          steps.n8n_call.outputs.risk == 'critical'
+      # Disparar siempre el CI, pasando el risk como input
+      - name: Trigger CI workflow
         uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -159,13 +147,7 @@ jobs:
               repo: context.repo.repo,
               workflow_id: 'CI.yml',
               ref: context.payload.pull_request.head.ref,
+              inputs: {
+                risk: '${{ steps.n8n_call.outputs.risk }}',
+              },
             })
-
-  ansible:
-    needs: n8n
-    runs-on: ubuntu-latest
-    if: needs.n8n.outputs.risk == 'bajo' || needs.n8n.outputs.risk == 'low'
-    steps:
-      - name: Dummy Ansible check
-        run: |
-          echo "Riesgo bajo: job ansible (dummy) completado para satisfacer el check requerido."
