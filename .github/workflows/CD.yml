@@ -128,15 +128,26 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const ip = '${{ needs.terraform.outputs.ip }}';
-            const body = 'Entorno efímero desplegado\n\n- Health: http://' + ip + '/health\n- Version: http://' + ip + '/version';
-            const issue_number = Number('${{ steps.find-pr.outputs.number }}');
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number,
-              body
-            });
+            try {
+              const ip = '${{ needs.terraform.outputs.ip }}';
+              const issue_number = Number('${{ steps.find-pr.outputs.number }}');
+
+              const body = [
+                'Entorno efímero desplegado:',
+                '',
+                `Health: http://${ip}/health`,
+                `Version: http://${ip}/version`
+              ].join('\n');
+
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number,
+                body
+              });
+            } catch (e) {
+              core.warning(`No se pudo crear el comentario en el PR: ${e}`);
+            }
 
       - name: Clean up private key
         if: always()
