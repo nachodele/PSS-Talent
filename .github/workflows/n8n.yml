@@ -122,12 +122,11 @@ jobs:
       - name: Comment PR with risk
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ steps.pr.outputs.pr_number }}
+          RISK: ${{ steps.n8n_call.outputs.risk }}
+          MSG: ${{ steps.n8n_call.outputs.msg }}
         run: |
           set -e
-
-          PR_NUMBER="${{ steps.pr.outputs.pr_number }}"
-          RISK="${{ steps.n8n_call.outputs.risk }}"
-          MSG="${{ steps.n8n_call.outputs.msg }}"
 
           BODY=$(jq -n --arg risk "$RISK" --arg msg "$MSG" \
             '{ body: ("n8n ha clasificado este PR como: **" + $risk + "**.\n\n" + $msg) }')
