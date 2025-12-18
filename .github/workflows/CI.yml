@@ -2,6 +2,11 @@ name: CI - Infra y Config
 
 on:
   workflow_dispatch:
+    inputs:
+      risk:
+        description: "Risk level from n8n"
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -17,7 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       TERRAFORM_DIR: ./Trabajo-Final/Dev-Workspace/terraform
-
+    if: github.event.inputs.risk == 'critico' || github.event.inputs.risk == 'critical'
     steps:
       - uses: actions/checkout@v4
 
@@ -51,7 +56,7 @@ jobs:
     needs: terraform-ci
     env:
       ANSIBLE_DIR: ./Trabajo-Final/Dev-Workspace/ansible
-
+    if: github.event.inputs.risk == 'critico' || github.event.inputs.risk == 'critical'
     steps:
       - uses: actions/checkout@v4
 
@@ -75,4 +80,7 @@ jobs:
               repo: context.repo.repo,
               workflow_id: 'CD.yml',
               ref: context.ref,
+              inputs: {
+                risk: '${{ github.event.inputs.risk }}',
+              },
             });
