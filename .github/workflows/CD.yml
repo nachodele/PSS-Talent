@@ -162,7 +162,7 @@ jobs:
         if: always()
         run: rm -rf ~/.ssh/
 
-  status:
+  nombre_raro:
     runs-on: ubuntu-latest
     needs: [terraform, ansible]
     if: always()
