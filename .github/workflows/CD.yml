@@ -7,10 +7,19 @@ on:
         description: "Risk level from n8n/CI"
         required: true
         type: string
+      pr_number:
+        description: "Pull Request number"
+        required: true
+        type: string
+      sha:
+        description: "Head SHA of the PR"
+        required: true
+        type: string
 
 permissions:
   contents: read
   pull-requests: write
+  checks: write   # necesario para usar la API de Checks
 
 env:
   AWS_REGION: ${{ secrets.AWS_REGION }}
@@ -159,6 +168,7 @@ jobs:
     if: always()
     steps:
       - name: Decidir estado final
+        id: decide
         run: |
           RISK="${{ github.event.inputs.risk }}"
           TF_RESULT="${{ needs.terraform.result || 'skipped' }}"
@@ -168,17 +178,48 @@ jobs:
           echo "Resultado terraform: $TF_RESULT"
           echo "Resultado ansible: $ANS_RESULT"
 
+          CONCLUSION="success"
+          SUMMARY="CD ejecutado correctamente."
+
           if [ "$RISK" = "critico" ] || [ "$RISK" = "critical" ]; then
-            # Para crítico, exigimos terraform y ansible success
             if [ "$TF_RESULT" != "success" ] || [ "$ANS_RESULT" != "success" ]; then
               echo "CD no ha terminado bien para riesgo crítico, fallo pipeline."
+              CONCLUSION="failure"
+              SUMMARY="CD falló para riesgo crítico."
+              echo "conclusion=$CONCLUSION" >> $GITHUB_OUTPUT
+              echo "summary=$SUMMARY" >> $GITHUB_OUTPUT
               exit 1
             fi
 
-            echo "Riesgo crítico: CD OK. Ahora requiere aprobación humana en el PR."
-            exit 0
+            SUMMARY="Riesgo crítico: CD OK. Ahora requiere aprobación humana en el PR."
+          else
+            SUMMARY="Riesgo bajo: CD skipeado o no requerido, pipeline OK."
           fi
 
-          # Para riesgo bajo: CD skipeado, pipeline pasa
-          echo "Riesgo bajo: CD skipeado, pipeline-status OK."
-          exit 0
+          echo "conclusion=$CONCLUSION" >> $GITHUB_OUTPUT
+          echo "summary=$SUMMARY" >> $GITHUB_OUTPUT
+
+      - name: Report CD status check to PR
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const conclusion = '${{ steps.decide.outputs.conclusion || 'failure' }}';
+            const summary = '${{ steps.decide.outputs.summary }}';
+            const prNumber = parseInt('${{ github.event.inputs.pr_number }}', 10);
+            const sha = '${{ github.event.inputs.sha }}';
+
+            // Crear un check run asociado al PR
+            await github.checks.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              name: 'CD - Entorno efímero',
+              head_sha: sha,
+              status: 'completed',
+              conclusion: conclusion,
+              output: {
+                title: 'CD - Entorno efímero',
+                summary: summary,
+              },
+            });
