@@ -18,6 +18,7 @@ on:
 
 permissions:
   contents: read
+  actions: write    # necesario para createWorkflowDispatch
 
 env:
   AWS_REGION: ${{ secrets.AWS_REGION }}
@@ -64,3 +65,24 @@ jobs:
       - name: Lint Ansible playbooks
         working-directory: ${{ env.ANSIBLE_DIR }}
         run: ansible-lint .
+
+  trigger-cd-low:
+    runs-on: ubuntu-latest
+    if: github.event.inputs.risk == 'bajo' || github.event.inputs.risk == 'low'
+    steps:
+      - name: Trigger CD workflow (low risk)
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'CD.yml', // nombre exacto del archivo del workflow CD
+              ref: context.ref,      // rama donde está el PR / commit
+              inputs: {
+                risk: '${{ github.event.inputs.risk }}',
+                pr_number: '${{ github.event.inputs.pr_number }}',
+                sha: '${{ github.event.inputs.sha }}',
+              },
+            });
