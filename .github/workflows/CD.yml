@@ -17,9 +17,8 @@ on:
         type: string
 
 permissions:
-  contents: read, write
+  contents: read
   pull-requests: write
-  checks: write   # necesario para usar la API de Checks
 
 env:
   AWS_REGION: ${{ secrets.AWS_REGION }}
@@ -66,7 +65,6 @@ jobs:
     runs-on: ubuntu-latest
     env:
       ANSIBLE_DIR: ./Trabajo-Final/Dev-Workspace/ansible
-    # Solo para riesgo crítico (mismo input)
     if: github.event.inputs.risk == 'critico' || github.event.inputs.risk == 'critical'
 
     steps:
@@ -168,7 +166,6 @@ jobs:
     if: always()
     steps:
       - name: Decidir estado final
-        id: decide
         run: |
           RISK="${{ github.event.inputs.risk }}"
           TF_RESULT="${{ needs.terraform.result || 'skipped' }}"
@@ -178,44 +175,14 @@ jobs:
           echo "Resultado terraform: $TF_RESULT"
           echo "Resultado ansible: $ANS_RESULT"
 
-          CONCLUSION="success"
-          SUMMARY="CD ejecutado correctamente."
-
           if [ "$RISK" = "critico" ] || [ "$RISK" = "critical" ]; then
             if [ "$TF_RESULT" != "success" ] || [ "$ANS_RESULT" != "success" ]; then
               echo "CD no ha terminado bien para riesgo crítico, fallo pipeline."
-              CONCLUSION="failure"
-              SUMMARY="CD falló para riesgo crítico."
-              echo "conclusion=$CONCLUSION" >> $GITHUB_OUTPUT
-              echo "summary=$SUMMARY" >> $GITHUB_OUTPUT
               exit 1
             fi
-
-            SUMMARY="Riesgo crítico: CD OK. Ahora requiere aprobación humana en el PR."
-          else
-            SUMMARY="Riesgo bajo: CD skipeado o no requerido, pipeline OK."
+            echo "Riesgo crítico: CD OK. Ahora requiere aprobación humana en el PR."
+            exit 0
           fi
 
-          echo "conclusion=$CONCLUSION" >> $GITHUB_OUTPUT
-          echo "summary=$SUMMARY" >> $GITHUB_OUTPUT
-
-      - name: Report CD status as commit status
-        if: always()
-        uses: actions/github-script@v7
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            const state = '${{ steps.decide.outputs.conclusion == 'success' && 'success' || 'failure' }}';
-            const description = '${{ steps.decide.outputs.summary }}';
-            const sha = '${{ github.event.inputs.sha }}';
-      
-            await github.rest.repos.createCommitStatus({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              sha,
-              state,                      // 'success' | 'failure' | 'pending'
-              context: 'CD - Entorno efímero',
-              description,
-            });
-
-
+          echo "Riesgo bajo: CD skipeado o no requerido, pipeline OK."
+          exit 0
