@@ -142,7 +142,7 @@ jobs:
         if: always()
         run: rm -rf ~/.ssh/
 
-  pipeline-status:
+  status:
     runs-on: ubuntu-latest
     needs: [terraform, ansible]
     if: always()
