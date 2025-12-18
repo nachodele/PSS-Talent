@@ -5,6 +5,6 @@ Herramientas empleadas:
 - Terraform
 - Github Actions
 
-Segunda Parte: GEN AI/ AGENTIC AI
+Segunda Parte: GEN AI/ Agentic AI
 - ML, DL
 - n8n
