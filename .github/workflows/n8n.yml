@@ -67,6 +67,7 @@ jobs:
         id: n8n_call
         run: |
           set -e
+          # Construir payload de forma segura (no depende de que el body sea JSON)
           jq -n \
             --arg pr_number "${{ steps.pr.outputs.pr_number }}" \
             --arg pr_title "${{ steps.pr.outputs.pr_title }}" \
@@ -90,40 +91,41 @@ jobs:
             -H "Content-Type: application/json" \
             -d @payload.json)
 
-          echo "Respuesta de n8n cruda:"
+          echo "Respuesta de n8n (cruda):"
           echo "$RESPONSE"
 
-          # Comprobar si la respuesta es JSON válido
-          echo "$RESPONSE" | jq -e . >/dev/null 2>&1 || {
-            echo "Respuesta de n8n NO es JSON válido, usando valores por defecto."
+          # A partir de aquí NO dejamos que un fallo de jq pare el step.
+          set +e
+
+          # ¿Parece JSON? (heurística simple para evitar jq cuando claramente no lo es)
+          echo "$RESPONSE" | grep -q '{'
+          IS_JSON=$?
+
+          if [ "$IS_JSON" -ne 0 ]; then
+            echo "Respuesta de n8n NO parece JSON; se usa riesgo 'unknown'."
             RAW_RISK="unknown"
             RAW_MSG="Análisis completado por n8n (respuesta no JSON)."
+          else
+            # Intentar parsear con jq; si falla, también caer a 'unknown'
+            PARSED_RISK=$(echo "$RESPONSE" | jq -er '.risk_level // "unknown"' 2>/dev/null)
+            if [ "$?" -ne 0 ]; then
+              echo "jq no pudo leer .risk_level; se usa 'unknown'."
+              RAW_RISK="unknown"
+            else
+              RAW_RISK="$PARSED_RISK"
+            fi
 
-            RISK=${RAW_RISK#=}
-            RISK=$(echo "$RISK" | tr -d '[:space:]')
-            MSG=${RAW_MSG#=}
+            PARSED_MSG=$(echo "$RESPONSE" | jq -er '.message // .reason // "Análisis completado por n8n."' 2>/dev/null)
+            if [ "$?" -ne 0 ]; then
+              echo "jq no pudo leer .message/.reason; se usa mensaje por defecto."
+              RAW_MSG="Análisis completado por n8n."
+            else
+              RAW_MSG="$PARSED_MSG"
+            fi
+          fi
 
-            echo "RISK normalizado (fallback): $RISK"
-            echo "risk=$RISK" >> "$GITHUB_OUTPUT"
-
-            {
-              echo 'msg<<EOF'
-              echo "$MSG"
-              echo 'EOF'
-            } >> "$GITHUB_OUTPUT"
-
-            echo "n8n_response<<EOF" >> "$GITHUB_OUTPUT"
-            echo "$RESPONSE"
-            echo "EOF" >> "$GITHUB_OUTPUT"
-            exit 0
-          }
-
-          # Si es JSON válido, parsear normalmente
-          RAW_RISK=$(echo "$RESPONSE" | jq -r '.risk_level // "unknown"')
           RISK=${RAW_RISK#=}
           RISK=$(echo "$RISK" | tr -d '[:space:]')
-
-          RAW_MSG=$(echo "$RESPONSE" | jq -r '.message // .reason // "Análisis completado por n8n."')
           MSG=${RAW_MSG#=}
 
           echo "RISK normalizado: $RISK"
@@ -137,7 +139,7 @@ jobs:
 
           echo "n8n_response<<EOF" >> "$GITHUB_OUTPUT"
           echo "$RESPONSE"
-          echo "EOF" >> "$GITHUB_OUTPUT"
+          echo "EOF"
 
       - name: Debug RISK
         run: |
