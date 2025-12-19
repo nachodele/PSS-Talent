@@ -90,9 +90,35 @@ jobs:
             -H "Content-Type: application/json" \
             -d @payload.json)
 
-          echo "Respuesta de n8n:"
+          echo "Respuesta de n8n cruda:"
           echo "$RESPONSE"
 
+          # Comprobar si la respuesta es JSON válido
+          echo "$RESPONSE" | jq -e . >/dev/null 2>&1 || {
+            echo "Respuesta de n8n NO es JSON válido, usando valores por defecto."
+            RAW_RISK="unknown"
+            RAW_MSG="Análisis completado por n8n (respuesta no JSON)."
+
+            RISK=${RAW_RISK#=}
+            RISK=$(echo "$RISK" | tr -d '[:space:]')
+            MSG=${RAW_MSG#=}
+
+            echo "RISK normalizado (fallback): $RISK"
+            echo "risk=$RISK" >> "$GITHUB_OUTPUT"
+
+            {
+              echo 'msg<<EOF'
+              echo "$MSG"
+              echo 'EOF'
+            } >> "$GITHUB_OUTPUT"
+
+            echo "n8n_response<<EOF" >> "$GITHUB_OUTPUT"
+            echo "$RESPONSE"
+            echo "EOF" >> "$GITHUB_OUTPUT"
+            exit 0
+          }
+
+          # Si es JSON válido, parsear normalmente
           RAW_RISK=$(echo "$RESPONSE" | jq -r '.risk_level // "unknown"')
           RISK=${RAW_RISK#=}
           RISK=$(echo "$RISK" | tr -d '[:space:]')
@@ -129,7 +155,7 @@ jobs:
           set -e
 
           BODY=$(jq -n --arg risk "$RISK" --arg msg "$MSG" \
-            '{ body: ("n8n ha clasificado este PR como: **" + $risk + "**.\n\n" + $msg) }')
+            '{ body: ("n8n ha clasificado este PR como: " + $risk + ".\n\n" + $msg) }')
 
           curl -s -X POST \
             -H "Authorization: Bearer $GH_TOKEN" \
