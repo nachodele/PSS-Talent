@@ -116,7 +116,7 @@ jobs:
         run: |
           set -e
           BODY=$(cat << EOF
-          🚨 **n8n Risk Analysis**: $RISK
+          **n8n Risk Analysis**: $RISK
 
           $MSG
           EOF
