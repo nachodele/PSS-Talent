@@ -55,7 +55,9 @@ jobs:
 
           head -c 50000 pr.diff > pr_trimmed.diff
 
-          PR_DIFF_ESCAPED=$(cat pr_trimmed.diff | jq -Rs .)
+          # Escapar diff para JSON usando printf + jq -R (correcto)
+          printf '%s' "$(cat pr_trimmed.diff)" | jq -R . > pr_diff_escaped.json
+          PR_DIFF_ESCAPED=$(cat pr_diff_escaped.json)
 
           echo "pr_diff=$PR_DIFF_ESCAPED" >> "$GITHUB_OUTPUT"
 
