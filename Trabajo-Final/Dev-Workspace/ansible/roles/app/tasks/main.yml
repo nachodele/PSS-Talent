@@ -100,7 +100,7 @@
 - name: Asegurar contenedor ejecutándose
   community.docker.docker_container:
     name: "{{ app_container_name }}"
-    image: "{{ app_image_name }}:latest"
+    image: "{{ app_image_nae }}:latest"
     state: started
     recreate: true
     restart_policy: always
