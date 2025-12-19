@@ -9,7 +9,7 @@ on:
         type: string
       pr_number:
         description: "Pull Request number"
-        required: false
+        required: true
         type: string
       sha:
         description: "Head SHA of the PR"
@@ -45,9 +45,13 @@ jobs:
         run: terraform -chdir=${{ env.TERRAFORM_DIR }} init
 
       - name: Terraform plan
+        env:
+          TF_VAR_pr_id: ${{ github.event.inputs.pr_number || '0' }}
         run: terraform -chdir=${{ env.TERRAFORM_DIR }} plan -input=false
 
       - name: Terraform apply
+        env:
+          TF_VAR_pr_id: ${{ github.event.inputs.pr_number || '0' }}
         run: terraform -chdir=${{ env.TERRAFORM_DIR }} apply -auto-approve -input=false
 
       - name: Export Terraform outputs
