@@ -67,22 +67,24 @@ jobs:
         id: n8n_call
         run: |
           set -e
-          set -x
-          # Construir payload de forma segura (no depende de que el body sea JSON)
+          # Escapar el diff a string JSON seguro
+          PR_DIFF_ESCAPED=$(printf '%s' "${{ steps.diff.outputs.pr_diff }}" | jq -Rs .)
+
+          # Construir el payload con jq usando el diff ya escapado
           jq -n \
             --arg pr_number "${{ steps.pr.outputs.pr_number }}" \
-            --arg pr_title "${{ steps.pr.outputs.pr_title }}" \
-            --arg pr_body "${{ steps.pr.outputs.pr_body }}" \
-            --arg pr_diff "${{ steps.diff.outputs.pr_diff }}" \
-            --arg repo "${{ github.repository }}" \
-            --arg sha "${{ github.event.pull_request.head.sha }}" \
+            --arg pr_title  "${{ steps.pr.outputs.pr_title }}" \
+            --arg pr_body   "${{ steps.pr.outputs.pr_body }}" \
+            --arg repo      "${{ github.repository }}" \
+            --arg sha       "${{ github.event.pull_request.head.sha }}" \
+            --argjson pr_diff "$PR_DIFF_ESCAPED" \
             '{
               pr_number: $pr_number,
-              pr_title: $pr_title,
-              pr_body: $pr_body,
-              pr_diff: $pr_diff,
-              repo: $repo,
-              sha: $sha
+              pr_title:  $pr_title,
+              pr_body:   $pr_body,
+              pr_diff:   $pr_diff,
+              repo:      $repo,
+              sha:       $sha
             }' > payload.json
 
           echo "Payload a n8n:"
@@ -95,10 +97,7 @@ jobs:
           echo "Respuesta de n8n (cruda):"
           echo "$RESPONSE"
 
-          # A partir de aquí NO dejamos que un fallo de jq pare el step.
           set +e
-
-          # ¿Parece JSON? (heurística simple para evitar jq cuando claramente no lo es)
           echo "$RESPONSE" | grep -q '{'
           IS_JSON=$?
 
@@ -107,7 +106,6 @@ jobs:
             RAW_RISK="unknown"
             RAW_MSG="Análisis completado por n8n (respuesta no JSON)."
           else
-            # Intentar parsear con jq; si falla, también caer a 'unknown'
             PARSED_RISK=$(echo "$RESPONSE" | jq -er '.risk_level // "unknown"' 2>/dev/null)
             if [ "$?" -ne 0 ]; then
               echo "jq no pudo leer .risk_level; se usa 'unknown'."
