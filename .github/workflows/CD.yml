@@ -30,9 +30,6 @@ jobs:
     runs-on: ubuntu-latest
     env:
       TERRAFORM_DIR: ./Trabajo-Final/Dev-Workspace/terraform
-    # Solo para riesgo crítico
-    if: github.event.inputs.risk == 'critico' || github.event.inputs.risk == 'critical'
-
     outputs:
       ip: ${{ steps.tf-out.outputs.ip }}
       url: ${{ steps.tf-out.outputs.url }}
@@ -65,8 +62,6 @@ jobs:
     runs-on: ubuntu-latest
     env:
       ANSIBLE_DIR: ./Trabajo-Final/Dev-Workspace/ansible
-    if: github.event.inputs.risk == 'critico' || github.event.inputs.risk == 'critical'
-
     steps:
       - uses: actions/checkout@v4
 
@@ -159,30 +154,3 @@ jobs:
       - name: Clean up private key
         if: always()
         run: rm -rf ~/.ssh/
-
-  nombre_raro:
-    runs-on: ubuntu-latest
-    needs: [terraform, ansible]
-    if: always()
-    steps:
-      - name: Decidir estado final
-        run: |
-          RISK="${{ github.event.inputs.risk }}"
-          TF_RESULT="${{ needs.terraform.result || 'skipped' }}"
-          ANS_RESULT="${{ needs.ansible.result || 'skipped' }}"
-
-          echo "Riesgo: $RISK"
-          echo "Resultado terraform: $TF_RESULT"
-          echo "Resultado ansible: $ANS_RESULT"
-
-          if [ "$RISK" = "critico" ] || [ "$RISK" = "critical" ]; then
-            if [ "$TF_RESULT" != "success" ] || [ "$ANS_RESULT" != "success" ]; then
-              echo "CD no ha terminado bien para riesgo crítico, fallo pipeline."
-              exit 1
-            fi
-            echo "Riesgo crítico: CD OK. Ahora requiere aprobación humana en el PR."
-            exit 0
-          fi
-
-          echo "Riesgo bajo: CD skipeado o no requerido, pipeline OK."
-          exit 0

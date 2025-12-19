@@ -147,8 +147,10 @@ jobs:
           pull-request-number: ${{ steps.pr.outputs.pr_number }}
           merge-method: squash
 
-      # Disparar siempre el CI, pasando el risk como input
       - name: Trigger CI workflow
+        if: |
+          steps.n8n_call.outputs.risk == 'critico' ||
+          steps.n8n_call.outputs.risk == 'critical'
         uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
