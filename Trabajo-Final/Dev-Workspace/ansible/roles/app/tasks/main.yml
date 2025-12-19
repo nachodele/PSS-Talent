@@ -91,7 +91,7 @@
 
 - name: Construir imagen Docker
   community.docker.docker_image:
-    name: "{{ app_image_name }}"
+    name: "{{ app_image_nae }}"
     build:
       path: "{{ app_base_dir }}/app"
     source: build
