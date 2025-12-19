@@ -5,15 +5,15 @@ on:
     inputs:
       risk:
         description: "Risk level from n8n/CI"
-        required: true
+        required: false
         type: string
       pr_number:
         description: "Pull Request number"
-        required: true
+        required: false
         type: string
       sha:
         description: "Head SHA of the PR"
-        required: true
+        required: false
         type: string
 
 permissions:
