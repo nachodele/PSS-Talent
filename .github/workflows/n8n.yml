@@ -39,42 +39,40 @@ jobs:
           echo "pr_title=$TITLE" >> "$GITHUB_OUTPUT"
           echo "pr_body=$BODY" >> "$GITHUB_OUTPUT"
 
-      - name: Get PR diff (code changes)
-        id: diff
+      - name: Call n8n PR risk flow
+        id: n8n_call
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -e
-          PR_NUMBER="${{ steps.pr.outputs.pr_number }}"
+          
+          PR_NUMBER="${{ github.event.pull_request.number }}"
           REPO="${{ github.repository }}"
 
+          # 1. Obtener PR details
+          curl -s \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$REPO/pulls/$PR_NUMBER" > pr.json
+
+          TITLE=$(jq -r '.title // ""' pr.json)
+          BODY=$(jq -r '.body // ""' pr.json)
+
+          # 2. Obtener y escapar diff INMEDIATAMENTE (sin pasar por outputs)
           curl -s \
             -H "Authorization: Bearer $GH_TOKEN" \
             -H "Accept: application/vnd.github.v3.diff" \
-            "https://api.github.com/repos/$REPO/pulls/$PR_NUMBER" > pr.diff
+            "https://api.github.com/repos/$REPO/pulls/$PR_NUMBER" | head -c 50000 > pr.diff
 
-          head -c 50000 pr.diff > pr_trimmed.diff
+          PR_DIFF_ESCAPED=$(cat pr.diff | jq -Rs .)
 
-          echo "pr_diff<<DELIM_DIFF" >> "$GITHUB_OUTPUT"
-          cat pr_trimmed.diff >> "$GITHUB_OUTPUT"
-          echo "DELIM_DIFF" >> "$GITHUB_OUTPUT"
-
-      - name: Call n8n PR risk flow
-        id: n8n_call
-        run: |
-          set -e
-          
-          # Leer diff raw y escapar para JSON
-          PR_DIFF_RAW="${{ steps.diff.outputs.pr_diff }}"
-          PR_DIFF_ESCAPED=$(printf '%s' "$PR_DIFF_RAW" | jq -Rs .)
-          
-          # Construir payload JSON directamente
+          # 3. Construir payload
           jq -n \
-            --arg pr_number "${{ steps.pr.outputs.pr_number }}" \
-            --arg pr_title  "${{ steps.pr.outputs.pr_title }}" \
-            --arg pr_body   "${{ steps.pr.outputs.pr_body }}" \
+            --arg pr_number "$PR_NUMBER" \
+            --arg pr_title  "$TITLE" \
+            --arg pr_body   "$BODY" \
             --argjson pr_diff "$PR_DIFF_ESCAPED" \
-            --arg repo      "${{ github.repository }}" \
+            --arg repo      "$REPO" \
             --arg sha       "${{ github.event.pull_request.head.sha }}" \
             '{
               pr_number: $pr_number,
@@ -88,6 +86,7 @@ jobs:
           echo "Payload a n8n:"
           cat payload.json
 
+          # 4. Llamar n8n
           RESPONSE=$(curl -s -X POST "https://n8n8.alpinia.digital/webhook-test/bb734fe9-d0e1-4e8c-ad1f-452ca8b36427" \
             -H "Content-Type: application/json" \
             -d @payload.json)
@@ -95,7 +94,7 @@ jobs:
           echo "Respuesta de n8n (cruda):"
           echo "$RESPONSE"
 
-          # Parsear respuesta JSON de forma segura
+          # 5. Parsear respuesta
           if echo "$RESPONSE" | jq empty >/dev/null 2>&1; then
             RISK=$(echo "$RESPONSE" | jq -r '.risk_level // "unknown"' 2>/dev/null | sed 's/^=//' | tr -d '[:space:]')
             MSG=$(echo "$RESPONSE" | jq -r '.message // "Análisis completado por n8n."' 2>/dev/null | sed 's/^=//')
@@ -111,7 +110,7 @@ jobs:
       - name: Comment PR with risk
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PR_NUMBER: ${{ steps.pr.outputs.pr_number }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
           RISK: ${{ steps.n8n_call.outputs.risk }}
           MSG: ${{ steps.n8n_call.outputs.msg }}
         run: |
@@ -137,7 +136,7 @@ jobs:
         uses: peter-evans/enable-pull-request-automerge@v3
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          pull-request-number: ${{ steps.pr.outputs.pr_number }}
+          pull-request-number: ${{ github.event.pull_request.number }}
           merge-method: squash
 
       - name: Trigger CI workflow
@@ -155,7 +154,7 @@ jobs:
               ref: context.payload.pull_request.head.ref,
               inputs: {
                 risk: '${{ steps.n8n_call.outputs.risk }}',
-                pr_number: '${{ steps.pr.outputs.pr_number }}',
+                pr_number: '${{ github.event.pull_request.number }}',
                 sha: '${{ github.event.pull_request.head.sha }}',
               },
             });
