@@ -36,12 +36,8 @@ jobs:
           BODY=$(jq -r '.body // ""' pr.json)
 
           echo "pr_number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
-          echo "pr_title<<EOF" >> "$GITHUB_OUTPUT"
-          echo "$TITLE" >> "$GITHUB_OUTPUT"
-          echo "EOF" >> "$GITHUB_OUTPUT"
-          echo "pr_body<<EOF" >> "$GITHUB_OUTPUT"
-          echo "$BODY" >> "$GITHUB_OUTPUT"
-          echo "EOF" >> "$GITHUB_OUTPUT"
+          echo "pr_title=$TITLE" >> "$GITHUB_OUTPUT"
+          echo "pr_body=$BODY" >> "$GITHUB_OUTPUT"
 
       - name: Get PR diff (code changes)
         id: diff
@@ -59,25 +55,23 @@ jobs:
 
           head -c 50000 pr.diff > pr_trimmed.diff
 
-          echo "pr_diff<<EOF" >> "$GITHUB_OUTPUT"
-          cat pr_trimmed.diff >> "$GITHUB_OUTPUT"
-          echo "EOF" >> "$GITHUB_OUTPUT"
+          PR_DIFF_ESCAPED=$(cat pr_trimmed.diff | jq -Rs .)
+
+          echo "pr_diff=$PR_DIFF_ESCAPED" >> "$GITHUB_OUTPUT"
 
       - name: Call n8n PR risk flow
         id: n8n_call
         run: |
           set -e
-          # Escapar el diff a string JSON seguro
-          PR_DIFF_ESCAPED=$(printf '%s' "${{ steps.diff.outputs.pr_diff }}" | jq -Rs .)
-
-          # Construir el payload con jq usando el diff ya escapado
+          
+          # Construir payload JSON directamente
           jq -n \
             --arg pr_number "${{ steps.pr.outputs.pr_number }}" \
             --arg pr_title  "${{ steps.pr.outputs.pr_title }}" \
             --arg pr_body   "${{ steps.pr.outputs.pr_body }}" \
+            --arg pr_diff   "${{ steps.diff.outputs.pr_diff }}" \
             --arg repo      "${{ github.repository }}" \
             --arg sha       "${{ github.event.pull_request.head.sha }}" \
-            --argjson pr_diff "$PR_DIFF_ESCAPED" \
             '{
               pr_number: $pr_number,
               pr_title:  $pr_title,
@@ -97,54 +91,18 @@ jobs:
           echo "Respuesta de n8n (cruda):"
           echo "$RESPONSE"
 
-          set +e
-          echo "$RESPONSE" | grep -q '{'
-          IS_JSON=$?
-
-          if [ "$IS_JSON" -ne 0 ]; then
-            echo "Respuesta de n8n NO parece JSON; se usa riesgo 'unknown'."
-            RAW_RISK="unknown"
-            RAW_MSG="Análisis completado por n8n (respuesta no JSON)."
+          # Parsear respuesta JSON de forma segura (single-line)
+          if echo "$RESPONSE" | jq empty >/dev/null 2>&1; then
+            RISK=$(echo "$RESPONSE" | jq -r '.risk_level // "unknown"' 2>/dev/null | sed 's/^=//' | tr -d '[:space:]')
+            MSG=$(echo "$RESPONSE" | jq -r '.message // "Análisis completado por n8n."' 2>/dev/null | sed 's/^=//')
           else
-            PARSED_RISK=$(echo "$RESPONSE" | jq -er '.risk_level // "unknown"' 2>/dev/null)
-            if [ "$?" -ne 0 ]; then
-              echo "jq no pudo leer .risk_level; se usa 'unknown'."
-              RAW_RISK="unknown"
-            else
-              RAW_RISK="$PARSED_RISK"
-            fi
-
-            PARSED_MSG=$(echo "$RESPONSE" | jq -er '.message // .reason // "Análisis completado por n8n."' 2>/dev/null)
-            if [ "$?" -ne 0 ]; then
-              echo "jq no pudo leer .message/.reason; se usa mensaje por defecto."
-              RAW_MSG="Análisis completado por n8n."
-            else
-              RAW_MSG="$PARSED_MSG"
-            fi
+            RISK="unknown"
+            MSG="Análisis completado por n8n (respuesta no JSON)."
           fi
-
-          RISK=${RAW_RISK#=}
-          RISK=$(echo "$RISK" | tr -d '[:space:]')
-          MSG=${RAW_MSG#=}
 
           echo "RISK normalizado: $RISK"
           echo "risk=$RISK" >> "$GITHUB_OUTPUT"
-
-          {
-            echo 'msg<<EOF'
-            echo "$MSG"
-            echo 'EOF'
-          } >> "$GITHUB_OUTPUT"
-
-          echo "n8n_response<<EOF" >> "$GITHUB_OUTPUT"
-          echo "$RESPONSE"
-          echo "EOF"
-
-      - name: Debug RISK
-        run: |
-          echo "RISK output: >>>${{ steps.n8n_call.outputs.risk }}<<<"
-          echo "RAW RESPONSE (inicio):"
-          echo '${{ steps.n8n_call.outputs.n8n_response }}' | head -c 400 || true
+          echo "msg=$MSG" >> "$GITHUB_OUTPUT"
 
       - name: Comment PR with risk
         env:
@@ -154,15 +112,19 @@ jobs:
           MSG: ${{ steps.n8n_call.outputs.msg }}
         run: |
           set -e
+          BODY=$(cat << EOF
+          🚨 **n8n Risk Analysis**: $RISK
 
-          BODY=$(jq -n --arg risk "$RISK" --arg msg "$MSG" \
-            '{ body: ("n8n ha clasificado este PR como: " + $risk + ".\n\n" + $msg) }')
+          $MSG
+          EOF
+          )
 
           curl -s -X POST \
             -H "Authorization: Bearer $GH_TOKEN" \
             -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
             "https://api.github.com/repos/${{ github.repository }}/issues/$PR_NUMBER/comments" \
-            -d "$BODY"
+            -d "{\"body\": $(jq -sR . <<< "$BODY")}" || true
 
       - name: Enable auto-merge for low risk
         if: |
