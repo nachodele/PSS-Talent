@@ -75,8 +75,9 @@ jobs:
               workflow_id: 'CD.yml',
               ref: context.ref,
               inputs: {
-                risk: '${{ steps.n8n_call.outputs.risk }}',
-                pr_number: '${{ github.event.pull_request.number }}',
-                sha: '${{ github.event.pull_request.head.sha }}',
+                risk: '${{ github.event.inputs.risk }}',
+                pr_number: '${{ github.event.inputs.pr_number }}',
+                sha: '${{ github.event.inputs.sha }}',
               },
             });
+
