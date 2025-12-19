@@ -67,6 +67,7 @@ jobs:
         id: n8n_call
         run: |
           set -e
+          set -x
           # Construir payload de forma segura (no depende de que el body sea JSON)
           jq -n \
             --arg pr_number "${{ steps.pr.outputs.pr_number }}" \
