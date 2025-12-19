@@ -55,23 +55,25 @@ jobs:
 
           head -c 50000 pr.diff > pr_trimmed.diff
 
-          # Escapar diff para JSON usando printf + jq -R (correcto)
-          printf '%s' "$(cat pr_trimmed.diff)" | jq -R . > pr_diff_escaped.json
-          PR_DIFF_ESCAPED=$(cat pr_diff_escaped.json)
-
-          echo "pr_diff=$PR_DIFF_ESCAPED" >> "$GITHUB_OUTPUT"
+          echo "pr_diff<<DELIM_DIFF" >> "$GITHUB_OUTPUT"
+          cat pr_trimmed.diff >> "$GITHUB_OUTPUT"
+          echo "DELIM_DIFF" >> "$GITHUB_OUTPUT"
 
       - name: Call n8n PR risk flow
         id: n8n_call
         run: |
           set -e
           
+          # Leer diff raw y escapar para JSON
+          PR_DIFF_RAW="${{ steps.diff.outputs.pr_diff }}"
+          PR_DIFF_ESCAPED=$(printf '%s' "$PR_DIFF_RAW" | jq -Rs .)
+          
           # Construir payload JSON directamente
           jq -n \
             --arg pr_number "${{ steps.pr.outputs.pr_number }}" \
             --arg pr_title  "${{ steps.pr.outputs.pr_title }}" \
             --arg pr_body   "${{ steps.pr.outputs.pr_body }}" \
-            --arg pr_diff   "${{ steps.diff.outputs.pr_diff }}" \
+            --argjson pr_diff "$PR_DIFF_ESCAPED" \
             --arg repo      "${{ github.repository }}" \
             --arg sha       "${{ github.event.pull_request.head.sha }}" \
             '{
@@ -93,7 +95,7 @@ jobs:
           echo "Respuesta de n8n (cruda):"
           echo "$RESPONSE"
 
-          # Parsear respuesta JSON de forma segura (single-line)
+          # Parsear respuesta JSON de forma segura
           if echo "$RESPONSE" | jq empty >/dev/null 2>&1; then
             RISK=$(echo "$RESPONSE" | jq -r '.risk_level // "unknown"' 2>/dev/null | sed 's/^=//' | tr -d '[:space:]')
             MSG=$(echo "$RESPONSE" | jq -r '.message // "Análisis completado por n8n."' 2>/dev/null | sed 's/^=//')
