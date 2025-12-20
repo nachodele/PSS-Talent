@@ -4,7 +4,7 @@ resource "aws_security_group" "pr_alb_sg" {
   vpc_id      = aws_vpc.pr_vpc.id
 
   ingress {
-    description = "HTTP public ALB"  
+    description = "HTTP public ALB"
     from_port   = 80
     to_port     = 80
     protocol    = "tcp"
@@ -12,7 +12,7 @@ resource "aws_security_group" "pr_alb_sg" {
   }
 
   egress {
-    description = "Internet outbound" 
+    description = "Internet outbound"
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
@@ -31,23 +31,23 @@ resource "aws_security_group" "pr_ec2_sg" {
   vpc_id      = aws_vpc.pr_vpc.id
 
   ingress {
-    description = "SSH Ansible deploy"   
+    description = "SSH Ansible deploy"
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]  # SSH público (key protege)
+    cidr_blocks = ["0.0.0.0/0"] # SSH público (key protege)
   }
 
   ingress {
-    description = "ALB to EC2 HTTP"     
-    from_port        = 80
-    to_port          = 80
-    protocol         = "tcp"
-    security_groups  = [aws_security_group.pr_alb_sg.id]
+    description     = "ALB to EC2 HTTP"
+    from_port       = 80
+    to_port         = 80
+    protocol        = "tcp"
+    security_groups = [aws_security_group.pr_alb_sg.id]
   }
 
   egress {
-    description = "Internet outbound"   
+    description = "Internet outbound"
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
@@ -66,13 +66,13 @@ resource "aws_lb" "pr_alb" {
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.pr_alb_sg.id]
-  
+
   #  FIX: subnets (plural) - 2 AZs
   subnets = [
     aws_subnet.pr_subnet_a.id,
     aws_subnet.pr_subnet_b.id
   ]
-  
+
   tags = {
     Name  = "alb-pr-${var.pr_id}"
     PR_ID = var.pr_id
@@ -92,7 +92,7 @@ resource "aws_lb_target_group" "pr_tg" {
     timeout             = 5
     interval            = 10
     path                = "/health"
-    matcher             = "200"  
+    matcher             = "200"
   }
 
   tags = {
@@ -105,7 +105,7 @@ resource "aws_lb_listener" "pr_listener" {
   load_balancer_arn = aws_lb.pr_alb.arn
   port              = "80"
   protocol          = "HTTP"
-  
+
   default_action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.pr_tg.arn

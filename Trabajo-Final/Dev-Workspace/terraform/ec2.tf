@@ -1,18 +1,18 @@
 resource "aws_instance" "pr_instance" {
   ami                    = data.aws_ami.ubuntu.id
   instance_type          = "t3.micro"
-  subnet_id              = aws_subnet.pr_subnet_a.id 
+  subnet_id              = aws_subnet.pr_subnet_a.id
   vpc_security_group_ids = [aws_security_group.pr_ec2_sg.id]
   key_name               = data.aws_key_pair.ssh_key_nachodele.key_name
 
   metadata_options {
     http_endpoint = "enabled"
-    http_tokens   = "required"  # IMDSv2
+    http_tokens   = "required" # IMDSv2
   }
 
   root_block_device {
-    volume_size         = 8
-    volume_type         = "gp3"
+    volume_size           = 8
+    volume_type           = "gp3"
     delete_on_termination = true
   }
 

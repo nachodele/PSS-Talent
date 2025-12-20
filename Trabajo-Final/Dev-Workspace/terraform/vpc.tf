@@ -1,6 +1,6 @@
 resource "aws_vpc" "pr_vpc" {
   cidr_block = "10.0.0.0/16"
-  
+
   tags = {
     Name  = "vpc-pr-${var.pr_id}"
     PR_ID = var.pr_id
@@ -13,7 +13,7 @@ resource "aws_subnet" "pr_subnet_a" {
   cidr_block              = "10.0.1.0/24"
   availability_zone       = "us-east-1a"
   map_public_ip_on_launch = true
-  
+
   tags = {
     Name  = "public-a-pr-${var.pr_id}"
     PR_ID = var.pr_id
@@ -26,7 +26,7 @@ resource "aws_subnet" "pr_subnet_b" {
   cidr_block              = "10.0.2.0/24"
   availability_zone       = "us-east-1b"
   map_public_ip_on_launch = true
-  
+
   tags = {
     Name  = "public-b-pr-${var.pr_id}"
     PR_ID = var.pr_id
@@ -36,21 +36,21 @@ resource "aws_subnet" "pr_subnet_b" {
 # Internet Gateway
 resource "aws_internet_gateway" "pr_igw" {
   vpc_id = aws_vpc.pr_vpc.id
-  
+
   tags = {
-    Name  = "igw-pr-${var.pr_id}"
+    Name = "igw-pr-${var.pr_id}"
   }
 }
 
 # Route Table Pública
 resource "aws_route_table" "pr_public_rt" {
   vpc_id = aws_vpc.pr_vpc.id
-  
+
   route {
     cidr_block = "0.0.0.0/0"
     gateway_id = aws_internet_gateway.pr_igw.id
   }
-  
+
   tags = {
     Name = "public-rt-pr-${var.pr_id}"
   }
