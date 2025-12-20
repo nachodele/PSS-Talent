@@ -1,34 +1,19 @@
-# --------- Key pair EXISTENTE ---------
-data "aws_key_pair" "ssh_key_nachodele" {
-  key_name = "ssh_key_nachodele"
-}
-
-data "aws_ami" "ubuntu" {
-  most_recent = true
-  owners      = ["099720109477"]
-
-  filter {
-    name   = "name"
-    values = ["ubuntu/images/hvm-ssd/ubuntu-focal-20.04-amd64-server-*"]
-  }
-
-  filter {
-    name   = "virtualization-type"
-    values = ["hvm"]
-  }
-}
-
 resource "aws_instance" "pr_instance" {
   ami                    = data.aws_ami.ubuntu.id
   instance_type          = "t3.micro"
-  subnet_id              = aws_subnet.pr_subnet.id
-  vpc_security_group_ids = [aws_security_group.pr_sg.id]
+  subnet_id              = aws_subnet.pr_subnet_a.id 
+  vpc_security_group_ids = [aws_security_group.pr_ec2_sg.id]
+  key_name               = data.aws_key_pair.ssh_key_nachodele.key_name
 
-  key_name = data.aws_key_pair.ssh_key_nachodele.key_name
+  metadata_options {
+    http_endpoint = "enabled"
+    http_tokens   = "required"  # IMDSv2
+  }
 
   root_block_device {
-    volume_size = 8
-    volume_type = "gp3"
+    volume_size         = 8
+    volume_type         = "gp3"
+    delete_on_termination = true
   }
 
   tags = {
@@ -41,4 +26,11 @@ resource "aws_instance" "pr_instance" {
   lifecycle {
     prevent_destroy = false
   }
+}
+
+# Target Group Attachment
+resource "aws_lb_target_group_attachment" "pr_tg_attach" {
+  target_group_arn = aws_lb_target_group.pr_tg.arn
+  target_id        = aws_instance.pr_instance.id
+  port             = 80
 }

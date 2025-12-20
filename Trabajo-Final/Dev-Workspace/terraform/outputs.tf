@@ -1,15 +1,4 @@
-output "instance_public_ip" {
-  description = "IP pública del entorno PR"
-  value       = aws_instance.pr_instance.public_ip
+output "alb_dns_name" {
+  description = "ALB DNS para PR links"
+  value       = aws_lb.pr_alb.dns_name
 }
-
-output "instance_id" {
-  description = "ID de la instancia"
-  value       = aws_instance.pr_instance.id
-}
-
-output "url_entorno" {
-  description = "URL completa del entorno"
-  value       = "http://${aws_instance.pr_instance.public_ip}"
-}
-
