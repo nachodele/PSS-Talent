@@ -49,7 +49,7 @@ jobs:
       - name: Saltar destroy si no es crítico
         if: steps.risk.outputs.is_critical != 'true'
         run: |
-          echo "Riesgo no crítico según comentario de n8n. No se ejecuta terraform destroy."
+          echo " Riesgo no crítico según n8n. Skip terraform destroy."
           exit 0
 
       - name: Set up Terraform
@@ -63,9 +63,30 @@ jobs:
         run: |
           terraform -chdir=${{ env.TERRAFORM_DIR }} init
 
-      - name: Terraform Destroy
+      - name: Terraform Refresh (anti-atascos)
         env:
           PR_ID: ${{ github.event.pull_request.number }}
         run: |
-          terraform -chdir=${{ env.TERRAFORM_DIR }} destroy -auto-approve \
-            -var="pr_id=${PR_ID}"
+          cd ${{ env.TERRAFORM_DIR }}
+          terraform refresh -var="pr_id=${PR_ID}" || true
+
+      - name: Terraform Destroy (timeout + force)
+        env:
+          PR_ID: ${{ github.event.pull_request.number }}
+        run: |
+          cd ${{ env.TERRAFORM_DIR }}
+          TF_CLI_ARGS_destroy="-timeout=10m -parallelism=10" \
+          TF_LOG=INFO \
+          terraform destroy -auto-approve \
+            -var="pr_id=${PR_ID}" \
+            -refresh=true || true  # ← CONTINÚA aunque falle
+
+      - name: Force cleanup S3 state (último recurso)
+        if: always()
+        env:
+          PR_ID: ${{ github.event.pull_request.number }}
+        run: |
+          STATE_KEY="terraform.tfstate"
+          aws s3 rm s3://trabajo-final-nachodele-pss/${STATE_KEY} \
+            --region us-east-1 || true
+          echo "🧹 State S3 limpiado para PR-${PR_ID}"

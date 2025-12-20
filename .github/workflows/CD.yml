@@ -1,4 +1,4 @@
-name: CD - Entorno efímero
+name: CD - Entorno efímero (ALB)
 
 on:
   workflow_dispatch:
@@ -32,7 +32,8 @@ jobs:
       TERRAFORM_DIR: ./Trabajo-Final/Dev-Workspace/terraform
     outputs:
       ip: ${{ steps.tf-out.outputs.ip }}
-      url: ${{ steps.tf-out.outputs.url }}
+      health_url: ${{ steps.tf-out.outputs.health_url }}
+      version_url: ${{ steps.tf-out.outputs.version_url }}
 
     steps:
       - uses: actions/checkout@v4
@@ -59,7 +60,8 @@ jobs:
         run: |
           cd ${{ env.TERRAFORM_DIR }}
           echo "ip=$(terraform output -raw instance_public_ip)" >> $GITHUB_OUTPUT
-          echo "url=$(terraform output -raw url_entorno)" >> $GITHUB_OUTPUT
+          echo "health_url=$(terraform output -raw alb_health_url)" >> $GITHUB_OUTPUT
+          echo "version_url=$(terraform output -raw alb_version_url)" >> $GITHUB_OUTPUT
 
   ansible:
     needs: terraform
@@ -100,15 +102,18 @@ jobs:
             main.yml \
             -vvv
 
-      - name: Print ephemeral environment URLs
+      - name: Print ephemeral environment URLs (ALB)
         run: |
+          HEALTH="${{ needs.terraform.outputs.health_url }}"
+          VERSION="${{ needs.terraform.outputs.version_url }}"
           IP="${{ needs.terraform.outputs.ip }}"
-          echo "========================================"
-          echo " Entorno efímero desplegado:"
+          echo "============================================"
+          echo "  Entorno efímero desplegado (ALB):"
           echo ""
-          echo "  Health : http://${IP}/health"
-          echo "  Version: http://${IP}/version"
-          echo "========================================"
+          echo "    Health : $HEALTH"
+          echo "    Version: $VERSION"
+          echo "    SSH    : ssh ubuntu@$IP"
+          echo "============================================"
 
       - name: Find PR for this branch
         id: find-pr
@@ -129,20 +134,25 @@ jobs:
               core.setOutput('number', pr.number.toString());
             }
 
-      - name: Comment URLs on PR
+      - name: Comment URLs on PR (ALB)
         uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             try {
+              const health = '${{ needs.terraform.outputs.health_url }}';
+              const version = '${{ needs.terraform.outputs.version_url }}';
               const ip = '${{ needs.terraform.outputs.ip }}';
+              const pr_number = '${{ github.event.inputs.pr_number }}';
               const issue_number = Number('${{ steps.find-pr.outputs.number }}');
 
               const body = [
-                'Entorno efímero desplegado:',
+                ' **Entorno PR-' + pr_number + ' DESPLEGADO!**',
                 '',
-                `Health: http://${ip}/health`,
-                `Version: http://${ip}/version`
+                ` **Health**: ${health}`,
+                ` **Version**: ${version}`,
+                ` **SSH Debug**: \`ssh -i ~/.ssh/ssh_key_nachodele.pem ubuntu@${ip}\``,
+                '',
               ].join('\n');
 
               await github.rest.issues.createComment({
