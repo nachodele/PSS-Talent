@@ -82,15 +82,20 @@ jobs:
             -lock-timeout=5m \
             -parallelism=10 || true
 
-      - name: Nuclear AWS Cleanup (si falla)
+      - name: Nuclear AWS + DynamoDB Cleanup
         if: always()
         env:
           PR_ID: ${{ github.event.pull_request.number }}
         run: |
-          # ALB + TG manual
-          aws elbv2 delete-load-balancer --load-balancer-arn $(aws elbv2 describe-load-balancers --names "alb-pr-${PR_ID}" --query 'LoadBalancers[0].LoadBalancerArn' --output text 2>/dev/null) || true
-          aws elbv2 delete-target-group --target-group-arn $(aws elbv2 describe-target-groups --names "tg-pr-${PR_ID}" --query 'TargetGroups[0].TargetGroupArn' --output text 2>/dev/null) || true
+          #  DynamoDB: SOLO el ítem LockID del PR
+          aws dynamodb delete-item \
+            --table-name tf-lock-trabajo-final-nachodele \
+            --key '{"LockID":{"S":"terraform.tfstate"}}' \
+            --region us-east-1 || true
           
-          # State S3
-          aws s3 rm s3://trabajo-final-nachodele-pss/terraform.tfstate --region us-east-1 || true
-          echo " Nuclear cleanup PR-${PR_ID}"
+          #  S3: SOLO el archivo de estado del PR
+          aws s3 rm s3://trabajo-final-nachodele-pss/terraform.tfstate \
+            --region us-east-1 || true
+          
+          echo " Cleanup COMPLETO PR-${PR_ID}: DynamoDB + S3"
+
