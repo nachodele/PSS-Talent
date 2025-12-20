@@ -87,15 +87,14 @@ jobs:
         env:
           PR_ID: ${{ github.event.pull_request.number }}
         run: |
-          #  DynamoDB: SOLO el ítem LockID del PR
+          #  LockID con bucket/key
           aws dynamodb delete-item \
             --table-name tf-lock-trabajo-final-nachodele \
-            --key '{"LockID":{"S":"terraform.tfstate"}}' \
+            --key '{"LockID":{"S":"trabajo-final-nachodele-pss/terraform.tfstate-md5"}}' \
             --region us-east-1 || true
           
-          #  S3: SOLO el archivo de estado del PR
           aws s3 rm s3://trabajo-final-nachodele-pss/terraform.tfstate \
             --region us-east-1 || true
           
-          echo " Cleanup COMPLETO PR-${PR_ID}: DynamoDB + S3"
+          echo " Cleanup PR-${PR_ID}"
 
