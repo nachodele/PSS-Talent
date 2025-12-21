@@ -30,23 +30,26 @@
     version: "{{ app_repo_version }}"
     update: true
 
-- name: Construir imagen Docker desde subdirectorio específico
-  community.docker.docker_image:
-    name: "{{ app_image_name }}"
-    build:
-      path: "{{ app_base_dir }}/repo/{{ app_repo_subdir }}"
-    state: present
-    force_source: true
+- name: Construir imagen Docker
+  become: true
+  ansible.builtin.shell: docker build -t {{ app_image_name }} "{{ app_base_dir }}/repo/{{ app_repo_subdir }}"
 
-- name: Asegurar contenedor ejecutándose
-  community.docker.docker_container:
-    name: "{{ app_container_name }}"
-    image: "{{ app_image_name }}"
-    state: started
-    recreate: true
-    restart_policy: unless-stopped
-    published_ports:
-      - "80:{{ app_container_port }}"
-    env:
-      PR_ID: "{{ app_repo_version }}"
-      GIT_SHA: "{{ app_repo_version }}"
+- name: Asegurar contenedor ejecutándose (IDEMPOTENTE)
+  become: true
+  ansible.builtin.shell: |
+    if ! docker ps --format "table {{ '{{' }}.Names}}" | grep -q "{{ app_container_name }}"; then
+      echo "Iniciando contenedor {{ app_container_name }}..."
+      docker stop {{ app_container_name }} || true
+      docker rm {{ app_container_name }} || true
+      docker run -d \
+        --name {{ app_container_name }} \
+        --restart unless-stopped \
+        -p 80:{{ app_container_port }} \
+        -e PR_ID="{{ app_repo_version }}" \
+        -e GIT_SHA="{{ app_repo_version }}" \
+        {{ app_image_name }}
+      echo " Contenedor {{ app_container_name }} INICIADO"
+    else
+      echo " Contenedor {{ app_container_name }} ya ejecutándose"
+    fi
+  changed_when: false
