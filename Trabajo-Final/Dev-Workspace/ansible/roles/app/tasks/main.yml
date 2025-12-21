@@ -30,27 +30,11 @@
     version: "{{ app_repo_version }}"
     update: true
 
-- name: Limpiar directorio de build
-  become: true
-  ansible.builtin.file:
-    path: "{{ app_base_dir }}/app"
-    state: absent
-
-- name: Copiar código al directorio de build
-  become: true
-  ansible.builtin.copy:
-    src: "{{ app_base_dir }}/repo/{{ app_repo_subdir }}/"
-    dest: "{{ app_base_dir }}/app/"
-    remote_src: true
-    owner: ubuntu
-    group: ubuntu
-    directory_mode: yes
-
-- name: Construir imagen Docker
+- name: Construir imagen Docker desde subdirectorio específico
   community.docker.docker_image:
     name: "{{ app_image_name }}"
     build:
-      path: "{{ app_base_dir }}/app"
+      path: "{{ app_base_dir }}/repo/{{ app_repo_subdir }}"
     state: present
     force_source: true
 
