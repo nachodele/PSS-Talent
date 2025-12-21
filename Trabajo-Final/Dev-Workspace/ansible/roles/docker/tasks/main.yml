@@ -1,5 +1,5 @@
 ---
-- name: Paquetes necesarios
+- name: Instalar paquetes necesarios para Docker
   become: true
   ansible.builtin.apt:
     name:
@@ -7,24 +7,33 @@
       - curl
       - gnupg
       - lsb-release
-      - python3-pip       
+      - python3-pip
+      - python3-dev
     state: present
     update_cache: true
 
-- name: Añadir clave GPG de Docker
+- name: Crear directorio para keyrings
   become: true
-  ansible.builtin.apt_key:
-    url: https://download.docker.com/linux/ubuntu/gpg
-    state: present
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: '0755'
 
-- name: Añadir repo oficial Docker
+- name: Descargar clave GPG de Docker
+  become: true
+  ansible.builtin.get_url:
+    url: https://download.docker.com/linux/ubuntu/gpg
+    dest: /etc/apt/keyrings/docker.asc
+    mode: '0644'
+
+- name: Añadir repositorio oficial Docker
   become: true
   ansible.builtin.apt_repository:
-    repo: "deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
+    repo: "deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
     state: present
     filename: docker
 
-- name: Instalar Docker
+- name: Instalar Docker y dependencias
   become: true
   ansible.builtin.apt:
     name:
@@ -34,14 +43,14 @@
     state: present
     update_cache: true
 
-- name: Habilitar y arrancar Docker
+- name: Habilitar y arrancar servicio Docker
   become: true
-  ansible.builtin.service:
+  ansible.builtin.systemd:
     name: docker
     state: started
     enabled: true
 
-- name: Añadir usuario ubuntu al grupo docker
+- name: Añadir usuario al grupo docker
   become: true
   ansible.builtin.user:
     name: ubuntu

@@ -1,28 +1,5 @@
 ---
-- name: Actualizar cache APT
-  become: true
-  apt:
-    update_cache: yes
-
-- name: Instalar python3-pip PRIMERO
-  become: true
-  apt:
-    name: python3-pip
-    state: present
-
-- name: Instalar python3-dev
-  become: true
-  apt:
-    name: python3-dev
-    state: present
-
-- name: Instalar librería docker para Ansible
-  become: true
-  ansible.builtin.pip:
-    name: docker
-    state: present
-
-- name: Fijar versiones compatibles de docker y requests
+- name: Instalar librerías Python para Docker Ansible
   become: true
   ansible.builtin.pip:
     name:
@@ -30,35 +7,9 @@
       - "requests<2.32.0"
     state: present
 
-- name: Instalar Docker
+- name: Esperar a que Docker socket esté disponible
   become: true
-  apt:
-    name:
-      - apt-transport-https
-      - ca-certificates
-      - curl
-      - gnupg
-      - lsb-release
-      - docker.io
-    state: present
-
-- name: Agregar usuario ubuntu al grupo docker
-  become: true
-  user:
-    name: ubuntu
-    groups: docker
-    append: yes
-
-- name: Iniciar y habilitar Docker service
-  become: true
-  systemd:
-    name: docker
-    state: started
-    enabled: yes
-
-- name: Esperar a que Docker esté listo
-  become: true
-  wait_for:
+  ansible.builtin.wait_for:
     path: /var/run/docker.sock
     state: present
     timeout: 30
@@ -70,9 +21,9 @@
     state: directory
     owner: ubuntu
     group: ubuntu
-    mode: "0755"
+    mode: '0755'
 
-- name: Clonar o actualizar repositorio
+- name: Clonar/actualizar repositorio
   ansible.builtin.git:
     repo: "{{ app_repo_url }}"
     dest: "{{ app_base_dir }}/repo"
@@ -81,13 +32,14 @@
 
 - name: Copiar código al directorio de build
   become: true
-  ansible.builtin.copy:
+  ansible.builtin.synchronize:
     src: "{{ app_base_dir }}/repo/{{ app_repo_subdir }}/"
     dest: "{{ app_base_dir }}/app/"
-    owner: ubuntu
-    group: ubuntu
-    mode: "0755"
-    remote_src: true
+    delete: true
+    recursive: true
+    rsync_opts:
+      - "--chown=ubuntu:ubuntu"
+      - "--chmod=0755"
 
 - name: Construir imagen Docker
   community.docker.docker_image:
