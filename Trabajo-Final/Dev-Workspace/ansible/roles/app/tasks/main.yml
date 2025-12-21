@@ -30,32 +30,37 @@
     version: "{{ app_repo_version }}"
     update: true
 
+- name: Limpiar directorio de build
+  become: true
+  ansible.builtin.file:
+    path: "{{ app_base_dir }}/app"
+    state: absent
+
 - name: Copiar código al directorio de build
   become: true
-  ansible.builtin.synchronize:
+  ansible.builtin.copy:
     src: "{{ app_base_dir }}/repo/{{ app_repo_subdir }}/"
     dest: "{{ app_base_dir }}/app/"
-    delete: true
-    recursive: true
-    rsync_opts:
-      - "--chown=ubuntu:ubuntu"
-      - "--chmod=0755"
+    remote_src: true
+    owner: ubuntu
+    group: ubuntu
+    directory_mode: yes
 
 - name: Construir imagen Docker
   community.docker.docker_image:
     name: "{{ app_image_name }}"
     build:
       path: "{{ app_base_dir }}/app"
-    source: build
     state: present
+    force_source: true
 
 - name: Asegurar contenedor ejecutándose
   community.docker.docker_container:
     name: "{{ app_container_name }}"
-    image: "{{ app_image_name }}:latest"
+    image: "{{ app_image_name }}"
     state: started
     recreate: true
-    restart_policy: always
+    restart_policy: unless-stopped
     published_ports:
       - "80:{{ app_container_port }}"
     env:
